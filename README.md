@@ -8,9 +8,10 @@ This repository currently provides the project foundation:
 - Tailwind CSS with a shadcn-style component setup
 - Supabase SSR client wiring for browser, server, and middleware usage
 - Route protection and session refresh middleware
+- A full authenticated app shell with sidebar, navbar, org switching, and global command search
 - A full Supabase SQL schema with row-level security policies
 - Typed database models and a small query layer
-- A starter login page and dashboard shell
+- A premium dark-mode-first visual system with loading and empty states
 
 This README is part of the codebase contract. It should be updated whenever the architecture, setup flow, runtime behavior, or developer workflow changes.
 
@@ -46,27 +47,51 @@ The app is multi-tenant. Data isolation is enforced in the database with Supabas
 SocOS/
 ├── app/
 │   ├── (app)/
-│   │   └── dashboard/
-│   │       └── page.tsx
+│   │   ├── announcements/
+│   │   ├── calendar/
+│   │   ├── dashboard/
+│   │   ├── handovers/
+│   │   ├── meetings/
+│   │   ├── members/
+│   │   ├── resources/
+│   │   ├── settings/
+│   │   ├── tasks/
+│   │   └── layout.tsx
 │   ├── auth/
 │   │   ├── callback/
 │   │   │   └── route.ts
 │   │   └── page.tsx
 │   ├── login/
 │   │   └── page.tsx
+│   ├── onboarding/
+│   │   └── page.tsx
 │   ├── globals.css
 │   ├── layout.tsx
 │   └── page.tsx
 ├── components/
+│   ├── layout/
+│   │   ├── AppPage.tsx
+│   │   ├── CommandMenu.tsx
+│   │   ├── Navbar.tsx
+│   │   └── Sidebar.tsx
 │   └── ui/
+│       ├── avatar.tsx
 │       ├── button.tsx
 │       ├── card.tsx
+│       ├── command.tsx
+│       ├── dialog.tsx
+│       ├── dropdown-menu.tsx
+│       ├── EmptyState.tsx
 │       ├── form.tsx
 │       ├── input.tsx
-│       └── label.tsx
+│       ├── label.tsx
+│       ├── PageLoader.tsx
+│       ├── CardSkeleton.tsx
+│       └── skeleton.tsx
 ├── hooks/
 │   └── use-mounted.ts
 ├── lib/
+│   ├── org-context.tsx
 │   └── supabase/
 │       ├── client.ts
 │       ├── middleware.ts
@@ -95,10 +120,24 @@ This project uses the Next.js App Router.
 - `app/page.tsx` redirects `/` to `/dashboard`
 - `app/login/page.tsx` is the public login/landing page
 - `app/auth/callback/route.ts` handles Supabase auth code exchange
-- `app/(app)/dashboard/page.tsx` is the starter protected app area
+- `app/(app)/layout.tsx` is the authenticated shell wrapper
+- `app/(app)/*` contains the protected product routes
+- `app/onboarding/page.tsx` is the gated state for authenticated users with no memberships
 - `app/auth/page.tsx` redirects `/auth` to `/login`
 
 The route group `(app)` is used to separate authenticated app UI from public pages without affecting the final URL.
+
+Protected routes currently include:
+
+- `/dashboard`
+- `/tasks`
+- `/meetings`
+- `/resources`
+- `/handovers`
+- `/members`
+- `/calendar`
+- `/announcements`
+- `/settings`
 
 ### 2. Authentication and sessions
 
@@ -111,11 +150,18 @@ Supabase auth is wired for both server and client contexts:
 
 Current middleware behavior:
 
-- Protects `/dashboard` and any nested dashboard routes
+- Protects all authenticated app routes plus `/onboarding`
 - Redirects unauthenticated users from protected routes to `/login`
 - Preserves the intended destination in the `next` query param
 - Redirects authenticated users away from `/login` and `/auth` to `/dashboard`
 - Refreshes Supabase cookies during the request lifecycle
+
+Authenticated shell behavior in `app/(app)/layout.tsx`:
+
+- Calls `getCurrentUser()` and redirects to `/login` if there is no active session
+- Calls `getUserMemberships()` and redirects to `/onboarding` if the user has no organizations
+- Wraps the protected UI in `OrgProvider`
+- Renders a fixed-width sidebar and a full-height main content area
 
 ### 3. Database access
 
@@ -132,18 +178,53 @@ These helpers are server-side helpers built on the SSR Supabase client and typed
 
 Tailwind is configured in [`tailwind.config.ts`](/Users/harveyallen/Documents/Projects/SocOS/tailwind.config.ts). Global styles live in [`app/globals.css`](/Users/harveyallen/Documents/Projects/SocOS/app/globals.css).
 
+The current design system is dark-mode-first and driven by CSS variables:
+
+- `--background`
+- `--surface`
+- `--surface-2`
+- `--border`
+- `--accent`
+- `--accent-hover`
+- `--text-primary`
+- `--text-secondary`
+- `--text-muted`
+
+The root layout imports Inter with `next/font/google` and applies it globally.
+
 UI primitives currently live in [`components/ui`](/Users/harveyallen/Documents/Projects/SocOS/components/ui) and follow the shadcn pattern:
 
+- `avatar.tsx`
 - `button.tsx`
 - `card.tsx`
+- `command.tsx`
+- `dialog.tsx`
+- `dropdown-menu.tsx`
+- `EmptyState.tsx`
 - `input.tsx`
 - `label.tsx`
+- `PageLoader.tsx`
+- `CardSkeleton.tsx`
+- `skeleton.tsx`
 - `form.tsx`
 
 Shared utility helpers:
 
 - [`utils/cn.ts`](/Users/harveyallen/Documents/Projects/SocOS/utils/cn.ts): merges Tailwind class names with `clsx` and `tailwind-merge`
 - [`utils/format.ts`](/Users/harveyallen/Documents/Projects/SocOS/utils/format.ts): date and text formatting helpers
+
+Layout and shell components live in [`components/layout`](/Users/harveyallen/Documents/Projects/SocOS/components/layout):
+
+- `Sidebar.tsx`: fixed 240px sidebar with org switcher and primary navigation
+- `Navbar.tsx`: sticky top nav with title, search trigger, notifications, and user dropdown
+- `CommandMenu.tsx`: global `Cmd+K` search scoped to the active organization
+- `AppPage.tsx`: shared wrapper used by placeholder product routes
+
+Organization selection state lives in [`lib/org-context.tsx`](/Users/harveyallen/Documents/Projects/SocOS/lib/org-context.tsx), which:
+
+- receives memberships from the server layout
+- persists the active organization in `localStorage`
+- exposes `currentOrg`, `setCurrentOrg`, and `memberships` to client components
 
 ## Database design
 
@@ -322,6 +403,11 @@ Production server:
 npm run start
 ```
 
+Note on fonts:
+
+- the root layout uses Inter from Google Fonts through `next/font/google`
+- the first production build may need network access so Next can fetch the font during build time
+
 ## How login works right now
 
 The current UI is a foundation, not a complete auth flow. The login page explains where Supabase Auth should connect, but it does not yet render provider buttons or an email/password form wired to Supabase.
@@ -341,6 +427,19 @@ To finish auth UI in a future iteration, you would typically:
 - redirect to Supabase’s auth flow
 - return to `/auth/callback`
 
+## How the authenticated shell works
+
+Once a user is authenticated and has at least one membership:
+
+1. Middleware refreshes the Supabase session and allows the request through.
+2. `app/(app)/layout.tsx` fetches the current user profile and memberships.
+3. `OrgProvider` hydrates the client with all available memberships and restores the last selected organization from `localStorage`.
+4. `Sidebar` renders the org switcher, primary navigation, settings, and user summary.
+5. Each page renders a `Navbar` with the current page title.
+6. The navbar opens `CommandMenu`, which fetches tasks, members, meetings, resources, and handovers for the active organization only.
+
+That means the shell is organization-aware before any feature-specific pages are fully implemented.
+
 ## How to use this foundation
 
 ### For developers
@@ -348,11 +447,11 @@ To finish auth UI in a future iteration, you would typically:
 Use this repository as the base for the actual product features. A typical next step would be:
 
 1. Build the real login/signup UI.
-2. Add an authenticated app layout under `app/(app)`.
-3. Create organization switching and onboarding flows.
-4. Add CRUD pages for tasks, meetings, resources, and handovers.
-5. Add form validation with `zod` and `react-hook-form`.
-6. Expand the query layer or add server actions for mutations.
+2. Add real onboarding actions for creating or joining an organization.
+3. Replace the route empty states with real CRUD experiences.
+4. Add form validation with `zod` and `react-hook-form`.
+5. Expand the query layer or add server actions for mutations.
+6. Add detail views, pagination, and richer command search behavior.
 
 ### For end users
 
@@ -375,7 +474,16 @@ Once features are added, end users will be able to:
 - [`app/globals.css`](/Users/harveyallen/Documents/Projects/SocOS/app/globals.css): global Tailwind styles and CSS variables
 - [`app/page.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/page.tsx): redirects to the dashboard
 - [`app/login/page.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/login/page.tsx): public login/marketing shell
-- [`app/(app)/dashboard/page.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/(app)/dashboard/page.tsx): starter protected dashboard page
+- [`app/(app)/layout.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/(app)/layout.tsx): authenticated layout with membership gating
+- [`app/onboarding/page.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/onboarding/page.tsx): membership-empty onboarding gate
+- [`app/(app)/*/page.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/(app)): protected route pages rendered inside the shell
+
+### Authenticated UI shell
+
+- [`components/layout/Sidebar.tsx`](/Users/harveyallen/Documents/Projects/SocOS/components/layout/Sidebar.tsx): primary left rail and org switcher
+- [`components/layout/Navbar.tsx`](/Users/harveyallen/Documents/Projects/SocOS/components/layout/Navbar.tsx): sticky top bar for every product page
+- [`components/layout/CommandMenu.tsx`](/Users/harveyallen/Documents/Projects/SocOS/components/layout/CommandMenu.tsx): org-scoped global search
+- [`components/layout/AppPage.tsx`](/Users/harveyallen/Documents/Projects/SocOS/components/layout/AppPage.tsx): reusable placeholder route wrapper
 
 ### Supabase integration
 
@@ -396,6 +504,7 @@ Once features are added, end users will be able to:
 - [`utils/cn.ts`](/Users/harveyallen/Documents/Projects/SocOS/utils/cn.ts): class merging helper
 - [`utils/format.ts`](/Users/harveyallen/Documents/Projects/SocOS/utils/format.ts): date/text formatting helpers
 - [`hooks/use-mounted.ts`](/Users/harveyallen/Documents/Projects/SocOS/hooks/use-mounted.ts): tiny mount-state helper for future client components
+- [`lib/org-context.tsx`](/Users/harveyallen/Documents/Projects/SocOS/lib/org-context.tsx): active organization context and persistence
 
 ## Commands
 
@@ -410,7 +519,8 @@ npm run lint
 ## Known limitations of the current foundation
 
 - The login page is not yet wired to a real Supabase auth form or OAuth provider buttons.
-- There is no authenticated shared app layout yet for navigation, org switching, or headers.
+- The onboarding page is a gating screen only and does not yet create or join organizations.
+- The command menu navigates to section routes, but detail pages do not exist yet.
 - There are no mutation helpers or server actions yet.
 - There is no Supabase CLI project configuration or migration history yet.
 - Storage buckets and file upload flows are not configured yet.
@@ -419,11 +529,11 @@ npm run lint
 ## Recommended next implementation steps
 
 1. Add a real login/signup flow on `/login`.
-2. Add an authenticated `app/(app)/layout.tsx` with navigation.
-3. Add server actions for organization creation and membership management.
-4. Add CRUD pages for tasks, meetings, announcements, events, resources, and handovers.
-5. Add schema migrations and local Supabase CLI support.
-6. Add tests for auth flows, middleware, and query helpers.
+2. Add organization creation, invitations, and membership management flows.
+3. Replace the empty route stubs with real CRUD pages for tasks, meetings, announcements, events, resources, and handovers.
+4. Add schema migrations and local Supabase CLI support.
+5. Add tests for auth flows, middleware, org context persistence, and query helpers.
+6. Add notification data, real search ranking, and richer dashboard widgets.
 
 ## Keeping this README current
 

@@ -3,7 +3,18 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import type { Database } from "@/types/database";
 
-const PROTECTED_PATHS = ["/dashboard"];
+const PROTECTED_PATHS = [
+  "/dashboard",
+  "/tasks",
+  "/meetings",
+  "/resources",
+  "/handovers",
+  "/members",
+  "/calendar",
+  "/announcements",
+  "/settings",
+  "/onboarding"
+];
 const AUTH_PATHS = ["/login", "/auth"];
 
 function isProtectedPath(pathname: string) {

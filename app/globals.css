@@ -4,37 +4,86 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --background: #ffffff;
+    --surface: #f8f8fb;
+    --surface-2: #f0f0f5;
+    --border: #e4e4ec;
+    --accent: #6366f1;
+    --accent-hover: #4f46e5;
+    --text-primary: #111118;
+    --text-secondary: #6b6b7a;
+    --text-muted: #9b9ba8;
     --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: #0f0f11;
+    --surface: #1a1a1f;
+    --surface-2: #222228;
+    --border: #2e2e38;
+    --accent: #6366f1;
+    --accent-hover: #4f46e5;
+    --text-primary: #f4f4f6;
+    --text-secondary: #8b8b99;
+    --text-muted: #555562;
   }
 
   * {
     @apply border-border;
   }
 
+  html {
+    @apply bg-background text-foreground;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
-    background-image:
-      radial-gradient(circle at top, rgba(15, 23, 42, 0.08), transparent 35%),
-      linear-gradient(180deg, rgba(248, 250, 252, 0.9), rgba(255, 255, 255, 1));
+    font-family: var(--font-sans), sans-serif;
+    font-size: 0.875rem;
+    line-height: 1.6;
     min-height: 100vh;
+    background-image:
+      radial-gradient(circle at top left, rgba(99, 102, 241, 0.14), transparent 22%),
+      radial-gradient(circle at bottom right, rgba(99, 102, 241, 0.08), transparent 24%),
+      linear-gradient(180deg, color-mix(in srgb, var(--surface) 45%, transparent), transparent 24%);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-semibold tracking-tight text-foreground;
+  }
+
+  p {
+    color: var(--text-secondary);
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--accent) 24%, transparent);
+  }
+}
+
+@layer utilities {
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, color-mix(in srgb, var(--border) 55%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in srgb, var(--border) 55%, transparent) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  .surface-card {
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    border: 1px solid var(--border);
+    backdrop-filter: blur(18px);
   }
 }
