@@ -4,6 +4,7 @@ import type {
   MeetingNoteRow,
   MeetingRow,
   MembershipRole,
+  InviteRow,
   OrganizationRow,
   PermissionLevel,
   TaskRow,
@@ -24,3 +25,15 @@ export interface TaskWithAssignee extends TaskRow {
 export interface MeetingWithNotes extends MeetingRow {
   notes: MeetingNoteRow[];
 }
+
+export interface ActivityLogWithActor {
+  id: string;
+  organization_id: string;
+  actor_user_id: string | null;
+  action: string;
+  metadata: Record<string, unknown> | null;
+  created_at: string | null;
+  actor: Pick<UserRow, "id" | "full_name" | "email" | "avatar_url"> | null;
+}
+
+export type InviteWithStatus = InviteRow;

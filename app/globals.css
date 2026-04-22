@@ -74,6 +74,18 @@
 }
 
 @layer utilities {
+  @keyframes step-in {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
   .bg-grid {
     background-image:
       linear-gradient(to right, color-mix(in srgb, var(--border) 55%, transparent) 1px, transparent 1px),
@@ -85,5 +97,9 @@
     background: color-mix(in srgb, var(--surface) 92%, transparent);
     border: 1px solid var(--border);
     backdrop-filter: blur(18px);
+  }
+
+  .animate-step-in {
+    animation: step-in 280ms ease;
   }
 }

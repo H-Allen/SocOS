@@ -11,6 +11,7 @@ export type PermissionLevel = "admin" | "committee" | "member";
 export type TaskStatus = "todo" | "in_progress" | "done";
 export type TaskPriority = "low" | "medium" | "high";
 export type ResourceType = "file" | "link" | "note";
+export type InviteStatus = "pending" | "accepted" | "expired";
 
 export interface UserRow {
   id: string;
@@ -127,6 +128,15 @@ export interface ActivityLogRow {
   created_at: string | null;
 }
 
+export interface InviteRow {
+  id: string;
+  organization_id: string;
+  email: string;
+  invited_by: string | null;
+  status: InviteStatus;
+  created_at: string | null;
+}
+
 type Tables = {
   users: UserRow;
   organizations: OrganizationRow;
@@ -139,6 +149,7 @@ type Tables = {
   announcements: AnnouncementRow;
   events: EventRow;
   activity_logs: ActivityLogRow;
+  invites: InviteRow;
 };
 
 type InsertShape<T extends keyof Tables> =
@@ -257,6 +268,15 @@ type InsertShape<T extends keyof Tables> =
                             metadata?: Record<string, unknown> | null;
                             created_at?: string | null;
                           }
+                        : T extends "invites"
+                          ? {
+                              id?: string;
+                              organization_id: string;
+                              email: string;
+                              invited_by?: string | null;
+                              status?: InviteStatus;
+                              created_at?: string | null;
+                            }
                         : never;
 
 type UpdateShape<T extends keyof Tables> = Partial<InsertShape<T>>;
@@ -318,6 +338,11 @@ export interface Database {
         Row: ActivityLogRow;
         Insert: InsertShape<"activity_logs">;
         Update: UpdateShape<"activity_logs">;
+      };
+      invites: {
+        Row: InviteRow;
+        Insert: InsertShape<"invites">;
+        Update: UpdateShape<"invites">;
       };
     };
     Views: Record<string, never>;

@@ -1,9 +1,6 @@
-import Link from "next/link";
-import { Rocket } from "lucide-react";
 import { redirect } from "next/navigation";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
 import { getCurrentUser, getUserMemberships } from "@/lib/supabase/queries";
 
 export default async function OnboardingPage() {
@@ -20,30 +17,20 @@ export default async function OnboardingPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-6 py-12">
-      <Card className="w-full max-w-2xl bg-[var(--surface)]">
-        <CardHeader className="items-center text-center">
-          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-primary/15 text-primary">
-            <Rocket className="h-8 w-8" />
-          </div>
-          <CardTitle className="text-3xl">Welcome to SocietyOS</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-5 text-center">
-          <p>
-            Your account is ready, but you are not a member of any organization yet. The next step is to add an
-            organization creation or invitation flow so users can join their society workspace.
+    <main className="bg-grid flex min-h-screen items-center justify-center px-6 py-12">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.2),transparent_26%)]" />
+      <div className="relative z-10 w-full">
+        <div className="mx-auto mb-8 max-w-lg text-center">
+          <p className="text-sm font-medium uppercase tracking-[0.24em] text-[var(--text-muted)]">SocietyOS setup</p>
+          <h1 className="mt-4 text-4xl font-semibold tracking-tight text-foreground">Create your first society workspace</h1>
+          <p className="mt-3 text-base text-[var(--text-secondary)]">
+            You&apos;re a few steps away from inviting your committee and landing in a fully seeded dashboard.
           </p>
-          <p className="text-sm text-[var(--text-secondary)]">
-            Right now this page confirms the authenticated shell is working and safely prevents access to org-scoped
-            routes until memberships exist.
-          </p>
-          <div className="flex justify-center">
-            <Button asChild>
-              <Link href="/login">Back to login</Link>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+        <div className="mx-auto flex justify-center">
+          <OnboardingWizard userId={user.id} userName={user.full_name} />
+        </div>
+      </div>
     </main>
   );
 }

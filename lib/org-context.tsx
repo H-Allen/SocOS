@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
+import { ACTIVE_ORG_COOKIE, ACTIVE_ORG_STORAGE_KEY, resolveActiveOrganization } from "@/lib/org-state";
 import type { OrganizationWithMembership } from "@/types";
 
 type OrgContextValue = {
@@ -11,15 +12,20 @@ type OrgContextValue = {
 };
 
 const OrgContext = createContext<OrgContextValue | undefined>(undefined);
-const ORG_STORAGE_KEY = "societyos.active-org-id";
 
 type OrgProviderProps = {
   memberships: OrganizationWithMembership[];
+  initialOrgId?: string | null;
   children: React.ReactNode;
 };
 
-export function OrgProvider({ memberships, children }: OrgProviderProps) {
-  const [currentOrgId, setCurrentOrgId] = useState<string | null>(memberships[0]?.id ?? null);
+function persistActiveOrganizationSelection(organizationId: string) {
+  window.localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, organizationId);
+  document.cookie = `${ACTIVE_ORG_COOKIE}=${organizationId}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
+}
+
+export function OrgProvider({ memberships, initialOrgId, children }: OrgProviderProps) {
+  const [currentOrgId, setCurrentOrgId] = useState<string | null>(initialOrgId ?? memberships[0]?.id ?? null);
 
   useEffect(() => {
     if (!memberships.length) {
@@ -27,25 +33,24 @@ export function OrgProvider({ memberships, children }: OrgProviderProps) {
       return;
     }
 
-    const storedOrgId = window.localStorage.getItem(ORG_STORAGE_KEY);
-    const isStoredOrgAvailable = memberships.some((membership) => membership.id === storedOrgId);
-    const nextOrgId = isStoredOrgAvailable ? storedOrgId : memberships[0].id;
+    const storedOrgId = window.localStorage.getItem(ACTIVE_ORG_STORAGE_KEY);
+    const nextOrgId = resolveActiveOrganization(memberships, storedOrgId ?? initialOrgId)?.id ?? memberships[0].id;
 
     setCurrentOrgId(nextOrgId);
     if (nextOrgId) {
-      window.localStorage.setItem(ORG_STORAGE_KEY, nextOrgId);
+      persistActiveOrganizationSelection(nextOrgId);
     }
-  }, [memberships]);
+  }, [initialOrgId, memberships]);
 
   const value = useMemo<OrgContextValue>(() => {
-    const currentOrg = memberships.find((membership) => membership.id === currentOrgId) ?? memberships[0] ?? null;
+    const currentOrg = resolveActiveOrganization(memberships, currentOrgId);
 
     return {
       currentOrg,
       memberships,
       setCurrentOrg: (organizationId: string) => {
         setCurrentOrgId(organizationId);
-        window.localStorage.setItem(ORG_STORAGE_KEY, organizationId);
+        persistActiveOrganizationSelection(organizationId);
       }
     };
   }, [currentOrgId, memberships]);

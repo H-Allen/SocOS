@@ -125,6 +125,16 @@ create table if not exists public.activity_logs (
   created_at timestamptz default now()
 );
 
+create table if not exists public.invites (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations (id) on delete cascade,
+  email text not null,
+  invited_by uuid references public.users (id),
+  status text not null default 'pending' check (status in ('pending', 'accepted', 'expired')),
+  created_at timestamptz default now(),
+  unique (organization_id, email)
+);
+
 create or replace function public.is_org_member(org_id uuid)
 returns boolean
 language sql
@@ -200,6 +210,7 @@ alter table public.handovers enable row level security;
 alter table public.announcements enable row level security;
 alter table public.events enable row level security;
 alter table public.activity_logs enable row level security;
+alter table public.invites enable row level security;
 
 create policy "users_select_self_or_shared_org"
   on public.users
@@ -253,7 +264,18 @@ create policy "memberships_select_members"
 create policy "memberships_insert_managers"
   on public.memberships
   for insert
-  with check (public.can_manage_org(organization_id));
+  with check (
+    public.can_manage_org(organization_id)
+    or exists (
+      select 1
+      from public.organizations
+      where organizations.id = memberships.organization_id
+        and organizations.created_by = auth.uid()
+        and memberships.user_id = auth.uid()
+        and memberships.permission_level = 'admin'
+        and memberships.role = 'president'
+    )
+  );
 
 create policy "memberships_update_managers"
   on public.memberships
@@ -434,6 +456,27 @@ create policy "activity_logs_delete_managers"
   for delete
   using (public.can_manage_org(organization_id));
 
+create policy "invites_select_members"
+  on public.invites
+  for select
+  using (public.is_org_member(organization_id));
+
+create policy "invites_insert_managers"
+  on public.invites
+  for insert
+  with check (public.can_manage_org(organization_id));
+
+create policy "invites_update_managers"
+  on public.invites
+  for update
+  using (public.can_manage_org(organization_id))
+  with check (public.can_manage_org(organization_id));
+
+create policy "invites_delete_managers"
+  on public.invites
+  for delete
+  using (public.can_manage_org(organization_id));
+
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
@@ -453,3 +496,31 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+insert into storage.buckets (id, name, public)
+values ('org-logos', 'org-logos', true)
+on conflict (id) do nothing;
+
+create policy "org_logos_public_read"
+  on storage.objects
+  for select
+  using (bucket_id = 'org-logos');
+
+create policy "org_logos_authenticated_insert"
+  on storage.objects
+  for insert
+  to authenticated
+  with check (bucket_id = 'org-logos');
+
+create policy "org_logos_authenticated_update"
+  on storage.objects
+  for update
+  to authenticated
+  using (bucket_id = 'org-logos')
+  with check (bucket_id = 'org-logos');
+
+create policy "org_logos_authenticated_delete"
+  on storage.objects
+  for delete
+  to authenticated
+  using (bucket_id = 'org-logos');

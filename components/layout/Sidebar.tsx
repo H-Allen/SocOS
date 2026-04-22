@@ -69,9 +69,13 @@ export function Sidebar({ user }: SidebarProps) {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="flex w-full items-center gap-3 rounded-xl border border-border bg-[var(--surface-2)] px-3 py-3 text-left transition-colors hover:border-[color-mix(in_srgb,var(--accent)_36%,var(--border))] hover:bg-[color-mix(in_srgb,var(--surface-2)_80%,var(--accent)_20%)]">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 text-sm font-semibold text-primary">
-                {currentOrg?.name.slice(0, 2).toUpperCase() ?? "SO"}
-              </div>
+              {currentOrg?.logo_url ? (
+                <img src={currentOrg.logo_url} alt={currentOrg.name} className="h-10 w-10 rounded-xl object-cover" />
+              ) : (
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 text-sm font-semibold text-primary">
+                  {currentOrg?.name.slice(0, 2).toUpperCase() ?? "SO"}
+                </div>
+              )}
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-foreground">{currentOrg?.name ?? "No organization"}</p>
                 <p className="truncate text-xs text-[var(--text-secondary)]">{currentOrg?.university ?? "Switch workspace"}</p>

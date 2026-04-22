@@ -9,6 +9,8 @@ This repository currently provides the project foundation:
 - Supabase SSR client wiring for browser, server, and middleware usage
 - Route protection and session refresh middleware
 - A full authenticated app shell with sidebar, navbar, org switching, and global command search
+- A multi-step onboarding flow for first-time users
+- A real server-rendered dashboard using live Supabase data
 - A full Supabase SQL schema with row-level security policies
 - Typed database models and a small query layer
 - A premium dark-mode-first visual system with loading and empty states
@@ -74,6 +76,8 @@ SocOS/
 │   │   ├── CommandMenu.tsx
 │   │   ├── Navbar.tsx
 │   │   └── Sidebar.tsx
+│   ├── onboarding/
+│   │   └── OnboardingWizard.tsx
 │   └── ui/
 │       ├── avatar.tsx
 │       ├── button.tsx
@@ -91,7 +95,9 @@ SocOS/
 ├── hooks/
 │   └── use-mounted.ts
 ├── lib/
+│   ├── org-server.ts
 │   ├── org-context.tsx
+│   ├── org-state.ts
 │   └── supabase/
 │       ├── client.ts
 │       ├── middleware.ts
@@ -122,7 +128,7 @@ This project uses the Next.js App Router.
 - `app/auth/callback/route.ts` handles Supabase auth code exchange
 - `app/(app)/layout.tsx` is the authenticated shell wrapper
 - `app/(app)/*` contains the protected product routes
-- `app/onboarding/page.tsx` is the gated state for authenticated users with no memberships
+- `app/onboarding/page.tsx` is the first-time setup flow for authenticated users with no memberships
 - `app/auth/page.tsx` redirects `/auth` to `/login`
 
 The route group `(app)` is used to separate authenticated app UI from public pages without affecting the final URL.
@@ -163,7 +169,39 @@ Authenticated shell behavior in `app/(app)/layout.tsx`:
 - Wraps the protected UI in `OrgProvider`
 - Renders a fixed-width sidebar and a full-height main content area
 
-### 3. Database access
+### 3. Onboarding
+
+The onboarding flow lives in:
+
+- [`app/onboarding/page.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/onboarding/page.tsx)
+- [`components/onboarding/OnboardingWizard.tsx`](/Users/harveyallen/Documents/Projects/SocOS/components/onboarding/OnboardingWizard.tsx)
+
+It is a 3-step client-side flow for users with no memberships:
+
+1. Create the organization
+2. Queue team invites
+3. Choose a starter template
+
+Step 1:
+
+- validates organization details with `react-hook-form` + `zod`
+- optionally uploads a logo to the `org-logos` Supabase Storage bucket
+- inserts a row into `organizations`
+- inserts the creator’s first `memberships` row as `president` + `admin`
+
+Step 2:
+
+- accepts comma-separated email addresses
+- stores pending invite rows in `public.invites`
+- records per-email success or duplicate/error feedback in the UI
+
+Step 3:
+
+- seeds starter data based on the chosen organization template
+- creates sample tasks, one meeting, handover stubs, a welcome announcement, and activity logs
+- redirects to `/dashboard`
+
+### 4. Database access
 
 The typed query layer lives in [`lib/supabase/queries.ts`](/Users/harveyallen/Documents/Projects/SocOS/lib/supabase/queries.ts). Right now it includes:
 
@@ -174,7 +212,16 @@ The typed query layer lives in [`lib/supabase/queries.ts`](/Users/harveyallen/Do
 
 These helpers are server-side helpers built on the SSR Supabase client and typed with the database models in [`types/database.ts`](/Users/harveyallen/Documents/Projects/SocOS/types/database.ts).
 
-### 4. Styling and UI
+The query layer now also includes dashboard-focused helpers such as:
+
+- `getCurrentOrganization()`
+- `getDashboardTasks(orgId, userId)`
+- `getUpcomingMeetings(orgId)`
+- `getRecentActivity(orgId)`
+- `getDashboardAnnouncements(orgId)`
+- `getHealthCounts(orgId)`
+
+### 5. Styling and UI
 
 Tailwind is configured in [`tailwind.config.ts`](/Users/harveyallen/Documents/Projects/SocOS/tailwind.config.ts). Global styles live in [`app/globals.css`](/Users/harveyallen/Documents/Projects/SocOS/app/globals.css).
 
@@ -226,6 +273,8 @@ Organization selection state lives in [`lib/org-context.tsx`](/Users/harveyallen
 - persists the active organization in `localStorage`
 - exposes `currentOrg`, `setCurrentOrg`, and `memberships` to client components
 
+The active organization is also mirrored into a cookie through [`lib/org-state.ts`](/Users/harveyallen/Documents/Projects/SocOS/lib/org-state.ts) and resolved on the server through [`lib/org-server.ts`](/Users/harveyallen/Documents/Projects/SocOS/lib/org-server.ts). This is what allows server-rendered pages like the dashboard to follow the same organization selection as the sidebar.
+
 ## Database design
 
 The complete schema is in [`supabase/schema.sql`](/Users/harveyallen/Documents/Projects/SocOS/supabase/schema.sql).
@@ -243,6 +292,7 @@ The complete schema is in [`supabase/schema.sql`](/Users/harveyallen/Documents/P
 - `announcements`
 - `events`
 - `activity_logs`
+- `invites`
 
 ### Tenant model
 
@@ -266,6 +316,7 @@ RLS currently enforces:
 - Only `admin` and `committee` permission levels can insert, update, or delete organization-scoped data
 - Users can read their own user row
 - Users can update only their own user row
+- Organization creators can bootstrap the first membership row for their newly created organization during onboarding
 
 ### Automatic user provisioning
 
@@ -383,7 +434,15 @@ http://localhost:3000/auth/callback
 
 If you deploy later, add your production callback URL too.
 
-### 6. Run the app
+### 6. Storage setup
+
+The SQL schema now also provisions a public Storage bucket:
+
+- `org-logos`
+
+This bucket is used during onboarding for optional organization logo uploads.
+
+### 7. Run the app
 
 Development:
 
@@ -440,6 +499,43 @@ Once a user is authenticated and has at least one membership:
 
 That means the shell is organization-aware before any feature-specific pages are fully implemented.
 
+## How onboarding works
+
+The onboarding route is shown only to authenticated users with zero memberships.
+
+Once they complete the wizard:
+
+1. A new organization is created.
+2. The creator becomes the first admin member.
+3. The chosen organization is written to both `localStorage` and a cookie so the app shell immediately treats it as active.
+4. Optional invites are stored as pending records.
+5. Starter template data is seeded.
+6. The user is redirected into the live dashboard.
+
+## How the dashboard works
+
+[`app/(app)/dashboard/page.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/(app)/dashboard/page.tsx) is a server component.
+
+It:
+
+- reads the current user and memberships
+- resolves the active organization from the synced cookie
+- fetches dashboard data with `Promise.all`
+- renders a 12-column layout with:
+  - My Tasks
+  - Upcoming Meetings
+  - Recent Activity
+  - Announcements
+  - Org Health
+
+Dashboard data sources:
+
+- `tasks` assigned to the current user
+- `meetings` in the next 7 days
+- recent `activity_logs`
+- latest `announcements`, pinned first
+- health counts derived from tasks, handovers, memberships, and meetings
+
 ## How to use this foundation
 
 ### For developers
@@ -476,6 +572,8 @@ Once features are added, end users will be able to:
 - [`app/login/page.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/login/page.tsx): public login/marketing shell
 - [`app/(app)/layout.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/(app)/layout.tsx): authenticated layout with membership gating
 - [`app/onboarding/page.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/onboarding/page.tsx): membership-empty onboarding gate
+- [`components/onboarding/OnboardingWizard.tsx`](/Users/harveyallen/Documents/Projects/SocOS/components/onboarding/OnboardingWizard.tsx): multi-step org creation, invite, and template flow
+- [`app/(app)/dashboard/page.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/(app)/dashboard/page.tsx): live dashboard widgets backed by Supabase data
 - [`app/(app)/*/page.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/(app)): protected route pages rendered inside the shell
 
 ### Authenticated UI shell
@@ -505,6 +603,8 @@ Once features are added, end users will be able to:
 - [`utils/format.ts`](/Users/harveyallen/Documents/Projects/SocOS/utils/format.ts): date/text formatting helpers
 - [`hooks/use-mounted.ts`](/Users/harveyallen/Documents/Projects/SocOS/hooks/use-mounted.ts): tiny mount-state helper for future client components
 - [`lib/org-context.tsx`](/Users/harveyallen/Documents/Projects/SocOS/lib/org-context.tsx): active organization context and persistence
+- [`lib/org-state.ts`](/Users/harveyallen/Documents/Projects/SocOS/lib/org-state.ts): shared active-org constants and client-safe resolution helpers
+- [`lib/org-server.ts`](/Users/harveyallen/Documents/Projects/SocOS/lib/org-server.ts): server-side active-org resolution via cookies
 
 ## Commands
 
@@ -519,21 +619,21 @@ npm run lint
 ## Known limitations of the current foundation
 
 - The login page is not yet wired to a real Supabase auth form or OAuth provider buttons.
-- The onboarding page is a gating screen only and does not yet create or join organizations.
 - The command menu navigates to section routes, but detail pages do not exist yet.
 - There are no mutation helpers or server actions yet.
 - There is no Supabase CLI project configuration or migration history yet.
-- Storage buckets and file upload flows are not configured yet.
 - The service role key is prepared in envs but not yet used.
+- Invites are stored as pending records only; email delivery is not implemented yet.
+- Starter templates seed sample content, but there is no template management system yet.
 
 ## Recommended next implementation steps
 
 1. Add a real login/signup flow on `/login`.
-2. Add organization creation, invitations, and membership management flows.
-3. Replace the empty route stubs with real CRUD pages for tasks, meetings, announcements, events, resources, and handovers.
+2. Add invitation delivery and acceptance flows.
+3. Replace the remaining route stubs with real CRUD pages for tasks, meetings, announcements, events, resources, and handovers.
 4. Add schema migrations and local Supabase CLI support.
-5. Add tests for auth flows, middleware, org context persistence, and query helpers.
-6. Add notification data, real search ranking, and richer dashboard widgets.
+5. Add tests for auth flows, middleware, onboarding, org context persistence, and dashboard queries.
+6. Add notification data, real search ranking, and richer analytics widgets.
 
 ## Keeping this README current
 
