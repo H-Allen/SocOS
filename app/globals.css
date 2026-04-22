@@ -1,6 +1,7 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+@import "react-big-calendar/lib/css/react-big-calendar.css";
 
 @layer base {
   :root {
@@ -101,5 +102,85 @@
 
   .animate-step-in {
     animation: step-in 280ms ease;
+  }
+
+  .calendar-shell .rbc-calendar {
+    background: transparent;
+    color: var(--text-primary);
+    font-family: var(--font-sans), sans-serif;
+  }
+
+  .calendar-shell .rbc-toolbar {
+    margin-bottom: 1rem;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .calendar-shell .rbc-toolbar button {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-primary);
+    border-radius: 999px;
+    padding: 0.5rem 0.9rem;
+  }
+
+  .calendar-shell .rbc-toolbar button:hover,
+  .calendar-shell .rbc-toolbar button:focus,
+  .calendar-shell .rbc-toolbar button.rbc-active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+
+  .calendar-shell .rbc-month-view,
+  .calendar-shell .rbc-time-view {
+    border: 1px solid var(--border);
+    border-radius: 1.25rem;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--surface) 96%, transparent);
+  }
+
+  .calendar-shell .rbc-header,
+  .calendar-shell .rbc-time-header-content,
+  .calendar-shell .rbc-time-content,
+  .calendar-shell .rbc-month-row,
+  .calendar-shell .rbc-day-bg,
+  .calendar-shell .rbc-timeslot-group,
+  .calendar-shell .rbc-time-header,
+  .calendar-shell .rbc-time-gutter {
+    border-color: var(--border);
+  }
+
+  .calendar-shell .rbc-header {
+    padding: 0.85rem 0.5rem;
+    background: color-mix(in srgb, var(--surface-2) 78%, transparent);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--text-secondary);
+  }
+
+  .calendar-shell .rbc-date-cell {
+    padding: 0.35rem 0.55rem 0;
+    text-align: right;
+    color: var(--text-secondary);
+  }
+
+  .calendar-shell .rbc-off-range-bg {
+    background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+  }
+
+  .calendar-shell .rbc-today {
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+  }
+
+  .calendar-shell .rbc-event {
+    box-shadow: none;
+  }
+
+  .calendar-shell .rbc-show-more {
+    color: var(--accent);
+    font-weight: 600;
   }
 }

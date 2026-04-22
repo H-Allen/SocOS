@@ -1,6 +1,8 @@
 export * from "@/types/database";
 
 import type {
+  AnnouncementRow,
+  MembershipRow,
   MeetingNoteRow,
   MeetingAttendeeRow,
   MeetingAgendaItemRow,
@@ -9,6 +11,7 @@ import type {
   InviteRow,
   OrganizationRow,
   PermissionLevel,
+  ResourceRow,
   TaskRow,
   UserRow
 } from "@/types/database";
@@ -26,6 +29,18 @@ export interface TaskWithAssignee extends TaskRow {
 
 export interface TaskRecord extends TaskRow {
   assignee: Pick<UserRow, "id" | "full_name" | "email" | "avatar_url"> | null;
+}
+
+export interface ResourceRecord extends ResourceRow {
+  uploader: Pick<UserRow, "id" | "full_name" | "email" | "avatar_url"> | null;
+}
+
+export interface MemberRecord extends MembershipRow {
+  user: UserRow | null;
+}
+
+export interface AnnouncementRecord extends AnnouncementRow {
+  author: Pick<UserRow, "id" | "full_name" | "email" | "avatar_url"> | null;
 }
 
 export interface MeetingWithNotes extends MeetingRow {

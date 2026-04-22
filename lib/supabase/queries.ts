@@ -2,8 +2,11 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getServerActiveOrganization } from "@/lib/org-server";
 import type {
   ActivityLogWithActor,
+  AnnouncementRecord,
   AnnouncementRow,
+  EventRow,
   HandoverRow,
+  MemberRecord,
   MeetingAgendaItemRow,
   MeetingAttendeeRow,
   MeetingWithDetails,
@@ -13,6 +16,7 @@ import type {
   OrganizationRow,
   PermissionLevel,
   OrganizationWithMembership,
+  ResourceRecord,
   MembershipRole,
   TaskRecord,
   TaskWithAssignee,
@@ -89,7 +93,7 @@ export async function getOrganization(orgId: string): Promise<OrganizationRow | 
 
 export async function getOrgMembers(
   orgId: string
-): Promise<Array<MembershipRow & { user: UserRow | null }>> {
+): Promise<MemberRecord[]> {
   const supabase = createServerSupabaseClient();
   const { data, error } = await supabase
     .from("memberships")
@@ -111,6 +115,57 @@ export async function getOrgMembers(
     joined_at: membership.joined_at,
     user: membership.user as UserRow | null
   }));
+}
+
+export async function getOrganizationResources(orgId: string): Promise<ResourceRecord[]> {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("resources")
+    .select(
+      "id, organization_id, title, description, content, type, category, file_url, external_url, tags, uploaded_by, created_at, uploader:users(id, full_name, email, avatar_url)"
+    )
+    .eq("organization_id", orgId)
+    .order("created_at", { ascending: false })
+    .returns<ResourceRecord[]>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data ?? [];
+}
+
+export async function getOrganizationAnnouncements(orgId: string): Promise<AnnouncementRecord[]> {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("announcements")
+    .select("id, organization_id, title, content, pinned, created_by, created_at, author:users(id, full_name, email, avatar_url)")
+    .eq("organization_id", orgId)
+    .order("pinned", { ascending: false })
+    .order("created_at", { ascending: false })
+    .returns<AnnouncementRecord[]>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data ?? [];
+}
+
+export async function getOrganizationEvents(orgId: string): Promise<EventRow[]> {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("events")
+    .select("*")
+    .eq("organization_id", orgId)
+    .order("start_time", { ascending: true })
+    .returns<EventRow[]>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data ?? [];
 }
 
 export async function getDashboardTasks(orgId: string, userId: string): Promise<TaskWithAssignee[]> {

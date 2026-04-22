@@ -98,13 +98,21 @@ create table if not exists public.resources (
   organization_id uuid not null references public.organizations (id) on delete cascade,
   title text not null,
   description text,
+  content text,
   type text not null check (type in ('file', 'link', 'note')),
+  category text default 'Operations',
   file_url text,
   external_url text,
   tags text[],
   uploaded_by uuid references public.users (id),
   created_at timestamptz default now()
 );
+
+alter table public.resources
+  add column if not exists content text;
+
+alter table public.resources
+  add column if not exists category text default 'Operations';
 
 create table if not exists public.handovers (
   id uuid primary key default gen_random_uuid(),
@@ -168,11 +176,15 @@ create table if not exists public.invites (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations (id) on delete cascade,
   email text not null,
+  role text default 'member' check (role in ('president', 'secretary', 'treasurer', 'committee', 'member')),
   invited_by uuid references public.users (id),
   status text not null default 'pending' check (status in ('pending', 'accepted', 'expired')),
   created_at timestamptz default now(),
   unique (organization_id, email)
 );
+
+alter table public.invites
+  add column if not exists role text default 'member';
 
 create or replace function public.is_org_member(org_id uuid)
 returns boolean

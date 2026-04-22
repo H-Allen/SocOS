@@ -94,7 +94,9 @@ export interface ResourceRow {
   organization_id: string;
   title: string;
   description: string | null;
+  content: string | null;
   type: ResourceType;
+  category: string | null;
   file_url: string | null;
   external_url: string | null;
   tags: string[] | null;
@@ -151,6 +153,7 @@ export interface InviteRow {
   id: string;
   organization_id: string;
   email: string;
+  role: MembershipRole;
   invited_by: string | null;
   status: InviteStatus;
   created_at: string | null;
@@ -255,7 +258,9 @@ type InsertShape<T extends keyof Tables> =
                     organization_id: string;
                     title: string;
                     description?: string | null;
+                    content?: string | null;
                     type: ResourceType;
+                    category?: string | null;
                     file_url?: string | null;
                     external_url?: string | null;
                     tags?: string[] | null;
@@ -312,6 +317,7 @@ type InsertShape<T extends keyof Tables> =
                               id?: string;
                               organization_id: string;
                               email: string;
+                              role?: MembershipRole;
                               invited_by?: string | null;
                               status?: InviteStatus;
                               created_at?: string | null;
