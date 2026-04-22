@@ -2,6 +2,8 @@ export * from "@/types/database";
 
 import type {
   MeetingNoteRow,
+  MeetingAttendeeRow,
+  MeetingAgendaItemRow,
   MeetingRow,
   MembershipRole,
   InviteRow,
@@ -22,8 +24,18 @@ export interface TaskWithAssignee extends TaskRow {
   assignee: UserRow | null;
 }
 
+export interface TaskRecord extends TaskRow {
+  assignee: Pick<UserRow, "id" | "full_name" | "email" | "avatar_url"> | null;
+}
+
 export interface MeetingWithNotes extends MeetingRow {
   notes: MeetingNoteRow[];
+}
+
+export interface MeetingWithDetails extends MeetingRow {
+  notes: MeetingNoteRow[];
+  attendees: Array<MeetingAttendeeRow & { user: UserRow | null }>;
+  agendaItems: MeetingAgendaItemRow[];
 }
 
 export interface ActivityLogWithActor {

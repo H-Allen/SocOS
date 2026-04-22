@@ -1,11 +1,18 @@
 import { redirect } from "next/navigation";
 
-import { HandoverVaultIndex } from "@/components/handovers/HandoverVaultIndex";
+import { HandoverDetailClient } from "@/components/handovers/HandoverDetailClient";
 import { Navbar } from "@/components/layout/Navbar";
 import { getServerActiveOrganization } from "@/lib/org-server";
+import { slugifyRole } from "@/lib/handover";
 import { getCurrentUser, getOrganizationHandovers, getUserMemberships } from "@/lib/supabase/queries";
 
-export default async function HandoversPage() {
+export default async function HandoverDetailPage({
+  params
+}: {
+  params: {
+    role: string;
+  };
+}) {
   const [user, memberships] = await Promise.all([getCurrentUser(), getUserMemberships()]);
 
   if (!user) {
@@ -23,12 +30,13 @@ export default async function HandoversPage() {
   }
 
   const handovers = await getOrganizationHandovers(currentOrg.id);
+  const handover = handovers.find((entry) => slugifyRole(entry.role_name) === params.role) ?? null;
 
   return (
     <div className="min-h-screen">
-      <Navbar title="Handovers" user={user} />
+      <Navbar title="Handover Vault" user={user} />
       <div className="bg-grid min-h-[calc(100vh-5rem)] px-6 py-6">
-        <HandoverVaultIndex organizationId={currentOrg.id} handovers={handovers} />
+        <HandoverDetailClient organizationId={currentOrg.id} roleSlug={params.role} initialHandover={handover} />
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { BookOpen, Calendar, CheckSquare, FileText, FolderOpen, Search, Users } from "lucide-react";
 
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { slugifyRole } from "@/lib/handover";
 import { useOrg } from "@/lib/org-context";
 import {
   Command,
@@ -204,7 +205,7 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
                 <CommandSeparator />
                 <CommandGroup heading="Handovers">
                   {results.handovers.map((handover) => (
-                    <CommandItem key={handover.id} onSelect={() => navigate(`/handovers?handover=${handover.id}`)}>
+                    <CommandItem key={handover.id} onSelect={() => navigate(`/handovers/${slugifyRole(handover.role_name)}`)}>
                       <BookOpen className="h-4 w-4 text-primary" />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-foreground">{handover.role_name}</p>

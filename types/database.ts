@@ -12,6 +12,7 @@ export type TaskStatus = "todo" | "in_progress" | "done";
 export type TaskPriority = "low" | "medium" | "high";
 export type ResourceType = "file" | "link" | "note";
 export type InviteStatus = "pending" | "accepted" | "expired";
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export interface UserRow {
   id: string;
@@ -47,6 +48,7 @@ export interface TaskRow {
   description: string | null;
   assigned_to: string | null;
   created_by: string | null;
+  source_meeting_id: string | null;
   due_date: string | null;
   status: TaskStatus | null;
   priority: TaskPriority | null;
@@ -72,6 +74,21 @@ export interface MeetingNoteRow {
   created_at: string | null;
 }
 
+export interface MeetingAttendeeRow {
+  id: string;
+  meeting_id: string;
+  user_id: string;
+  created_at: string | null;
+}
+
+export interface MeetingAgendaItemRow {
+  id: string;
+  meeting_id: string;
+  content: string;
+  position: number;
+  created_at: string | null;
+}
+
 export interface ResourceRow {
   id: string;
   organization_id: string;
@@ -94,7 +111,9 @@ export interface HandoverRow {
   key_contacts: string | null;
   advice: string | null;
   mistakes: string | null;
-  checklist: unknown[] | null;
+  content: Json | null;
+  checklist: Json[] | null;
+  completion_percent: number;
   updated_at: string | null;
 }
 
@@ -144,6 +163,8 @@ type Tables = {
   tasks: TaskRow;
   meetings: MeetingRow;
   meeting_notes: MeetingNoteRow;
+  meeting_attendees: MeetingAttendeeRow;
+  meeting_agenda_items: MeetingAgendaItemRow;
   resources: ResourceRow;
   handovers: HandoverRow;
   announcements: AnnouncementRow;
@@ -188,6 +209,7 @@ type InsertShape<T extends keyof Tables> =
               description?: string | null;
               assigned_to?: string | null;
               created_by?: string | null;
+              source_meeting_id?: string | null;
               due_date?: string | null;
               status?: TaskStatus | null;
               priority?: TaskPriority | null;
@@ -205,13 +227,28 @@ type InsertShape<T extends keyof Tables> =
                 created_by?: string | null;
                 created_at?: string | null;
               }
-            : T extends "meeting_notes"
+              : T extends "meeting_notes"
               ? {
                   id?: string;
                   meeting_id: string;
                   content?: string | null;
                   created_at?: string | null;
                 }
+              : T extends "meeting_attendees"
+                ? {
+                    id?: string;
+                    meeting_id: string;
+                    user_id: string;
+                    created_at?: string | null;
+                  }
+                : T extends "meeting_agenda_items"
+                  ? {
+                      id?: string;
+                      meeting_id: string;
+                      content: string;
+                      position?: number;
+                      created_at?: string | null;
+                    }
               : T extends "resources"
                 ? {
                     id?: string;
@@ -235,7 +272,9 @@ type InsertShape<T extends keyof Tables> =
                       key_contacts?: string | null;
                       advice?: string | null;
                       mistakes?: string | null;
-                      checklist?: unknown[] | null;
+                      content?: Json | null;
+                      checklist?: Json[] | null;
+                      completion_percent?: number;
                       updated_at?: string | null;
                     }
                   : T extends "announcements"
@@ -313,6 +352,16 @@ export interface Database {
         Row: MeetingNoteRow;
         Insert: InsertShape<"meeting_notes">;
         Update: UpdateShape<"meeting_notes">;
+      };
+      meeting_attendees: {
+        Row: MeetingAttendeeRow;
+        Insert: InsertShape<"meeting_attendees">;
+        Update: UpdateShape<"meeting_attendees">;
+      };
+      meeting_agenda_items: {
+        Row: MeetingAgendaItemRow;
+        Insert: InsertShape<"meeting_agenda_items">;
+        Update: UpdateShape<"meeting_agenda_items">;
       };
       resources: {
         Row: ResourceRow;

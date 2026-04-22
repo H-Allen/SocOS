@@ -1,7 +1,37 @@
-import { CheckSquare } from "lucide-react";
+import { redirect } from "next/navigation";
 
-import { AppPage } from "@/components/layout/AppPage";
+import { Navbar } from "@/components/layout/Navbar";
+import { TasksWorkspace } from "@/components/tasks/TasksWorkspace";
+import { getServerActiveOrganization } from "@/lib/org-server";
+import { getCurrentUser, getOrganizationTasks, getOrgMembers, getUserMemberships } from "@/lib/supabase/queries";
 
-export default function TasksPage() {
-  return <AppPage title="Tasks" icon={CheckSquare} description="Track committee work, ownership, and deadlines for your active organization." />;
+export default async function TasksPage() {
+  const [user, memberships] = await Promise.all([getCurrentUser(), getUserMemberships()]);
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  if (!memberships.length) {
+    redirect("/onboarding");
+  }
+
+  const currentOrg = getServerActiveOrganization(memberships);
+
+  if (!currentOrg) {
+    redirect("/onboarding");
+  }
+
+  const [tasks, members] = await Promise.all([getOrganizationTasks(currentOrg.id), getOrgMembers(currentOrg.id)]);
+
+  return (
+    <div className="min-h-screen">
+      <Navbar title="Tasks" user={user} />
+      <div className="bg-grid min-h-[calc(100vh-5rem)] px-6 py-6">
+        <div className="surface-card rounded-[28px] p-6">
+          <TasksWorkspace initialTasks={tasks} members={members} currentUser={user} currentOrg={currentOrg} />
+        </div>
+      </div>
+    </div>
+  );
 }

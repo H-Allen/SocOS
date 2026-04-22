@@ -44,6 +44,7 @@ create table if not exists public.tasks (
   description text,
   assigned_to uuid references public.users (id),
   created_by uuid references public.users (id),
+  source_meeting_id uuid,
   due_date date,
   status text default 'todo' check (status in ('todo', 'in_progress', 'done')),
   priority text default 'medium' check (priority in ('low', 'medium', 'high')),
@@ -69,6 +70,29 @@ create table if not exists public.meeting_notes (
   created_at timestamptz default now()
 );
 
+create table if not exists public.meeting_attendees (
+  id uuid primary key default gen_random_uuid(),
+  meeting_id uuid not null references public.meetings (id) on delete cascade,
+  user_id uuid not null references public.users (id) on delete cascade,
+  created_at timestamptz default now(),
+  unique (meeting_id, user_id)
+);
+
+create table if not exists public.meeting_agenda_items (
+  id uuid primary key default gen_random_uuid(),
+  meeting_id uuid not null references public.meetings (id) on delete cascade,
+  content text not null,
+  position integer not null default 0,
+  created_at timestamptz default now()
+);
+
+alter table public.tasks
+  drop constraint if exists tasks_source_meeting_id_fkey;
+
+alter table public.tasks
+  add constraint tasks_source_meeting_id_fkey
+  foreign key (source_meeting_id) references public.meetings (id) on delete set null;
+
 create table if not exists public.resources (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations (id) on delete cascade,
@@ -91,9 +115,24 @@ create table if not exists public.handovers (
   key_contacts text,
   advice text,
   mistakes text,
+  content jsonb default '{}'::jsonb,
   checklist jsonb default '[]'::jsonb,
+  completion_percent integer not null default 0 check (completion_percent between 0 and 100),
   updated_at timestamptz default now()
 );
+
+alter table public.handovers
+  add column if not exists content jsonb default '{}'::jsonb;
+
+alter table public.handovers
+  add column if not exists completion_percent integer not null default 0;
+
+alter table public.handovers
+  drop constraint if exists handovers_completion_percent_check;
+
+alter table public.handovers
+  add constraint handovers_completion_percent_check
+  check (completion_percent between 0 and 100);
 
 create table if not exists public.announcements (
   id uuid primary key default gen_random_uuid(),
@@ -205,6 +244,8 @@ alter table public.memberships enable row level security;
 alter table public.tasks enable row level security;
 alter table public.meetings enable row level security;
 alter table public.meeting_notes enable row level security;
+alter table public.meeting_attendees enable row level security;
+alter table public.meeting_agenda_items enable row level security;
 alter table public.resources enable row level security;
 alter table public.handovers enable row level security;
 alter table public.announcements enable row level security;
@@ -348,6 +389,48 @@ create policy "meeting_notes_update_managers"
 
 create policy "meeting_notes_delete_managers"
   on public.meeting_notes
+  for delete
+  using (public.can_manage_meeting(meeting_id));
+
+create policy "meeting_attendees_select_members"
+  on public.meeting_attendees
+  for select
+  using (public.is_meeting_member(meeting_id));
+
+create policy "meeting_attendees_insert_managers"
+  on public.meeting_attendees
+  for insert
+  with check (public.can_manage_meeting(meeting_id));
+
+create policy "meeting_attendees_update_managers"
+  on public.meeting_attendees
+  for update
+  using (public.can_manage_meeting(meeting_id))
+  with check (public.can_manage_meeting(meeting_id));
+
+create policy "meeting_attendees_delete_managers"
+  on public.meeting_attendees
+  for delete
+  using (public.can_manage_meeting(meeting_id));
+
+create policy "meeting_agenda_items_select_members"
+  on public.meeting_agenda_items
+  for select
+  using (public.is_meeting_member(meeting_id));
+
+create policy "meeting_agenda_items_insert_managers"
+  on public.meeting_agenda_items
+  for insert
+  with check (public.can_manage_meeting(meeting_id));
+
+create policy "meeting_agenda_items_update_managers"
+  on public.meeting_agenda_items
+  for update
+  using (public.can_manage_meeting(meeting_id))
+  with check (public.can_manage_meeting(meeting_id));
+
+create policy "meeting_agenda_items_delete_managers"
+  on public.meeting_agenda_items
   for delete
   using (public.can_manage_meeting(meeting_id));
 

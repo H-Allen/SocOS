@@ -11,6 +11,8 @@ This repository currently provides the project foundation:
 - A full authenticated app shell with sidebar, navbar, org switching, and global command search
 - A multi-step onboarding flow for first-time users
 - A real server-rendered dashboard using live Supabase data
+- A full Tasks experience with Kanban, table, my-tasks, creation, and drawer editing
+- A Meetings experience with list views and a detail page for notes, agenda, attendees, and action items
 - A full Supabase SQL schema with row-level security policies
 - Typed database models and a small query layer
 - A premium dark-mode-first visual system with loading and empty states
@@ -42,6 +44,9 @@ The app is multi-tenant. Data isolation is enforced in the database with Supabas
 - Supabase Auth + Postgres + RLS
 - `@supabase/ssr` for server/browser session support
 - `react-hook-form`, `zod`, and `@hookform/resolvers` for forms and validation
+- `@hello-pangea/dnd` for task drag-and-drop
+- `@tanstack/react-table` for the task table
+- `react-simple-wysiwyg` for meeting notes editing
 
 ## Current app structure
 
@@ -54,6 +59,7 @@ SocOS/
 │   │   ├── dashboard/
 │   │   ├── handovers/
 │   │   ├── meetings/
+│   │   │   └── [id]/
 │   │   ├── members/
 │   │   ├── resources/
 │   │   ├── settings/
@@ -76,8 +82,18 @@ SocOS/
 │   │   ├── CommandMenu.tsx
 │   │   ├── Navbar.tsx
 │   │   └── Sidebar.tsx
+│   ├── meetings/
+│   │   ├── CreateMeetingModal.tsx
+│   │   ├── MeetingDetailClient.tsx
+│   │   └── MeetingsWorkspace.tsx
 │   ├── onboarding/
 │   │   └── OnboardingWizard.tsx
+│   ├── tasks/
+│   │   ├── CreateTaskModal.tsx
+│   │   ├── KanbanBoard.tsx
+│   │   ├── TaskDetailDrawer.tsx
+│   │   ├── TaskTable.tsx
+│   │   └── TasksWorkspace.tsx
 │   └── ui/
 │       ├── avatar.tsx
 │       ├── button.tsx
@@ -91,7 +107,9 @@ SocOS/
 │       ├── label.tsx
 │       ├── PageLoader.tsx
 │       ├── CardSkeleton.tsx
-│       └── skeleton.tsx
+│       ├── sheet.tsx
+│       ├── skeleton.tsx
+│       └── textarea.tsx
 ├── hooks/
 │   └── use-mounted.ts
 ├── lib/
@@ -221,6 +239,14 @@ The query layer now also includes dashboard-focused helpers such as:
 - `getDashboardAnnouncements(orgId)`
 - `getHealthCounts(orgId)`
 
+It also includes typed task and meeting helpers such as:
+
+- `getOrganizationTasks(orgId)`
+- `getTaskActivity(orgId, taskId)`
+- `getMeetingsByTime(orgId)`
+- `getMeetingDetails(meetingId)`
+- `getMeetingActionItems(meetingId)`
+
 ### 5. Styling and UI
 
 Tailwind is configured in [`tailwind.config.ts`](/Users/harveyallen/Documents/Projects/SocOS/tailwind.config.ts). Global styles live in [`app/globals.css`](/Users/harveyallen/Documents/Projects/SocOS/app/globals.css).
@@ -252,7 +278,9 @@ UI primitives currently live in [`components/ui`](/Users/harveyallen/Documents/P
 - `label.tsx`
 - `PageLoader.tsx`
 - `CardSkeleton.tsx`
+- `sheet.tsx`
 - `skeleton.tsx`
+- `textarea.tsx`
 - `form.tsx`
 
 Shared utility helpers:
@@ -287,6 +315,8 @@ The complete schema is in [`supabase/schema.sql`](/Users/harveyallen/Documents/P
 - `tasks`
 - `meetings`
 - `meeting_notes`
+- `meeting_attendees`
+- `meeting_agenda_items`
 - `resources`
 - `handovers`
 - `announcements`
@@ -536,6 +566,64 @@ Dashboard data sources:
 - latest `announcements`, pinned first
 - health counts derived from tasks, handovers, memberships, and meetings
 
+## How tasks work
+
+The Tasks route now supports:
+
+- Kanban
+- Table
+- My Tasks
+
+Core files:
+
+- [`app/(app)/tasks/page.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/(app)/tasks/page.tsx)
+- [`components/tasks/TasksWorkspace.tsx`](/Users/harveyallen/Documents/Projects/SocOS/components/tasks/TasksWorkspace.tsx)
+- [`components/tasks/KanbanBoard.tsx`](/Users/harveyallen/Documents/Projects/SocOS/components/tasks/KanbanBoard.tsx)
+- [`components/tasks/TaskTable.tsx`](/Users/harveyallen/Documents/Projects/SocOS/components/tasks/TaskTable.tsx)
+- [`components/tasks/TaskDetailDrawer.tsx`](/Users/harveyallen/Documents/Projects/SocOS/components/tasks/TaskDetailDrawer.tsx)
+- [`components/tasks/CreateTaskModal.tsx`](/Users/harveyallen/Documents/Projects/SocOS/components/tasks/CreateTaskModal.tsx)
+
+Behavior:
+
+- Kanban drag-and-drop updates task status optimistically and then persists to Supabase
+- Table supports sorting and filtering by status, priority, and assignee
+- My Tasks prefilters to the current user’s assignments
+- Task creation and updates log to `activity_logs`
+- Task details open in a right-side drawer and auto-save with a debounce
+
+Task activity is currently stored in `activity_logs` using `metadata.task_id`.
+
+## How meetings work
+
+The Meetings route now supports:
+
+- upcoming and past tabs
+- meeting creation
+- a detail page at `/meetings/[id]`
+
+Core files:
+
+- [`app/(app)/meetings/page.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/(app)/meetings/page.tsx)
+- [`app/(app)/meetings/[id]/page.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/(app)/meetings/[id]/page.tsx)
+- [`components/meetings/MeetingsWorkspace.tsx`](/Users/harveyallen/Documents/Projects/SocOS/components/meetings/MeetingsWorkspace.tsx)
+- [`components/meetings/CreateMeetingModal.tsx`](/Users/harveyallen/Documents/Projects/SocOS/components/meetings/CreateMeetingModal.tsx)
+- [`components/meetings/MeetingDetailClient.tsx`](/Users/harveyallen/Documents/Projects/SocOS/components/meetings/MeetingDetailClient.tsx)
+
+Meeting detail currently supports:
+
+- editable header details
+- attendee add/remove
+- agenda add/reorder/delete
+- rich-text notes autosave every 5 seconds
+- action item creation into `tasks`
+- minutes export to markdown
+
+Supporting schema additions:
+
+- `meeting_attendees`
+- `meeting_agenda_items`
+- `tasks.source_meeting_id`
+
 ## How to use this foundation
 
 ### For developers
@@ -574,6 +662,9 @@ Once features are added, end users will be able to:
 - [`app/onboarding/page.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/onboarding/page.tsx): membership-empty onboarding gate
 - [`components/onboarding/OnboardingWizard.tsx`](/Users/harveyallen/Documents/Projects/SocOS/components/onboarding/OnboardingWizard.tsx): multi-step org creation, invite, and template flow
 - [`app/(app)/dashboard/page.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/(app)/dashboard/page.tsx): live dashboard widgets backed by Supabase data
+- [`app/(app)/tasks/page.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/(app)/tasks/page.tsx): full tasks workspace with multiple views
+- [`app/(app)/meetings/page.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/(app)/meetings/page.tsx): meetings list workspace
+- [`app/(app)/meetings/[id]/page.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/(app)/meetings/[id]/page.tsx): meeting detail route
 - [`app/(app)/*/page.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/(app)): protected route pages rendered inside the shell
 
 ### Authenticated UI shell
@@ -582,6 +673,17 @@ Once features are added, end users will be able to:
 - [`components/layout/Navbar.tsx`](/Users/harveyallen/Documents/Projects/SocOS/components/layout/Navbar.tsx): sticky top bar for every product page
 - [`components/layout/CommandMenu.tsx`](/Users/harveyallen/Documents/Projects/SocOS/components/layout/CommandMenu.tsx): org-scoped global search
 - [`components/layout/AppPage.tsx`](/Users/harveyallen/Documents/Projects/SocOS/components/layout/AppPage.tsx): reusable placeholder route wrapper
+
+### Tasks and Meetings
+
+- [`components/tasks/TasksWorkspace.tsx`](/Users/harveyallen/Documents/Projects/SocOS/components/tasks/TasksWorkspace.tsx): top-level tasks client workspace
+- [`components/tasks/KanbanBoard.tsx`](/Users/harveyallen/Documents/Projects/SocOS/components/tasks/KanbanBoard.tsx): drag-and-drop board
+- [`components/tasks/TaskTable.tsx`](/Users/harveyallen/Documents/Projects/SocOS/components/tasks/TaskTable.tsx): sortable/filterable table
+- [`components/tasks/TaskDetailDrawer.tsx`](/Users/harveyallen/Documents/Projects/SocOS/components/tasks/TaskDetailDrawer.tsx): auto-saving task editor
+- [`components/tasks/CreateTaskModal.tsx`](/Users/harveyallen/Documents/Projects/SocOS/components/tasks/CreateTaskModal.tsx): task creation flow
+- [`components/meetings/MeetingsWorkspace.tsx`](/Users/harveyallen/Documents/Projects/SocOS/components/meetings/MeetingsWorkspace.tsx): upcoming/past meeting views
+- [`components/meetings/CreateMeetingModal.tsx`](/Users/harveyallen/Documents/Projects/SocOS/components/meetings/CreateMeetingModal.tsx): meeting creation flow
+- [`components/meetings/MeetingDetailClient.tsx`](/Users/harveyallen/Documents/Projects/SocOS/components/meetings/MeetingDetailClient.tsx): editable meeting detail UI
 
 ### Supabase integration
 
@@ -619,20 +721,21 @@ npm run lint
 ## Known limitations of the current foundation
 
 - The login page is not yet wired to a real Supabase auth form or OAuth provider buttons.
-- The command menu navigates to section routes, but detail pages do not exist yet.
+- The command menu navigates to section routes, but most non-meeting detail pages do not exist yet.
 - There are no mutation helpers or server actions yet.
 - There is no Supabase CLI project configuration or migration history yet.
 - The service role key is prepared in envs but not yet used.
 - Invites are stored as pending records only; email delivery is not implemented yet.
 - Starter templates seed sample content, but there is no template management system yet.
+- Meeting notes use a lightweight editor rather than a collaborative editor.
 
 ## Recommended next implementation steps
 
 1. Add a real login/signup flow on `/login`.
 2. Add invitation delivery and acceptance flows.
-3. Replace the remaining route stubs with real CRUD pages for tasks, meetings, announcements, events, resources, and handovers.
+3. Replace the remaining route stubs with real CRUD pages for announcements, events, resources, handovers, and members.
 4. Add schema migrations and local Supabase CLI support.
-5. Add tests for auth flows, middleware, onboarding, org context persistence, and dashboard queries.
+5. Add tests for auth flows, middleware, onboarding, task flows, meeting flows, org context persistence, and dashboard queries.
 6. Add notification data, real search ranking, and richer analytics widgets.
 
 ## Keeping this README current

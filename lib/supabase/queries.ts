@@ -4,12 +4,17 @@ import type {
   ActivityLogWithActor,
   AnnouncementRow,
   HandoverRow,
+  MeetingAgendaItemRow,
+  MeetingAttendeeRow,
+  MeetingWithDetails,
+  MeetingNoteRow,
   MembershipRow,
   MeetingRow,
   OrganizationRow,
   PermissionLevel,
   OrganizationWithMembership,
   MembershipRole,
+  TaskRecord,
   TaskWithAssignee,
   UserRow
 } from "@/types";
@@ -203,7 +208,7 @@ export async function getHealthCounts(orgId: string) {
       .from("handovers")
       .select("id", { count: "exact", head: true })
       .eq("organization_id", orgId)
-      .or("responsibilities.is.null,responsibilities.eq."),
+      .eq("completion_percent", 0),
     supabase.from("memberships").select("id", { count: "exact", head: true }).eq("organization_id", orgId),
     supabase
       .from("meetings")
@@ -244,6 +249,147 @@ export async function getOrganizationHandovers(orgId: string): Promise<HandoverR
     .eq("organization_id", orgId)
     .order("updated_at", { ascending: false })
     .returns<HandoverRow[]>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data ?? [];
+}
+
+export async function getOrganizationTasks(orgId: string): Promise<TaskRecord[]> {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("tasks")
+    .select(
+      "id, organization_id, title, description, assigned_to, created_by, source_meeting_id, due_date, status, priority, recurring_rule, created_at, assignee:users(id, full_name, email, avatar_url)"
+    )
+    .eq("organization_id", orgId)
+    .order("created_at", { ascending: false })
+    .returns<TaskRecord[]>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data ?? [];
+}
+
+export async function getTaskActivity(orgId: string, taskId: string): Promise<ActivityLogWithActor[]> {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("activity_logs")
+    .select("id, organization_id, actor_user_id, action, metadata, created_at, actor:users(id, full_name, email, avatar_url)")
+    .eq("organization_id", orgId)
+    .contains("metadata", { task_id: taskId })
+    .order("created_at", { ascending: false })
+    .returns<ActivityLogWithActor[]>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data ?? [];
+}
+
+export async function getMeetingsByTime(orgId: string) {
+  const supabase = createServerSupabaseClient();
+  const now = new Date().toISOString();
+
+  const [upcoming, past] = await Promise.all([
+    supabase
+      .from("meetings")
+      .select("*")
+      .eq("organization_id", orgId)
+      .gte("start_time", now)
+      .order("start_time", { ascending: true })
+      .returns<MeetingRow[]>(),
+    supabase
+      .from("meetings")
+      .select("*")
+      .eq("organization_id", orgId)
+      .lt("start_time", now)
+      .order("start_time", { ascending: false })
+      .returns<MeetingRow[]>()
+  ]);
+
+  if (upcoming.error) {
+    throw upcoming.error;
+  }
+
+  if (past.error) {
+    throw past.error;
+  }
+
+  return {
+    upcoming: upcoming.data ?? [],
+    past: past.data ?? []
+  };
+}
+
+export async function getMeetingDetails(meetingId: string): Promise<MeetingWithDetails | null> {
+  const supabase = createServerSupabaseClient();
+  const { data: meeting, error: meetingError } = await supabase.from("meetings").select("*").eq("id", meetingId).maybeSingle<MeetingRow>();
+
+  if (meetingError) {
+    throw meetingError;
+  }
+
+  if (!meeting) {
+    return null;
+  }
+
+  const [notes, attendees, agendaItems] = await Promise.all([
+    supabase
+      .from("meeting_notes")
+      .select("*")
+      .eq("meeting_id", meetingId)
+      .order("created_at", { ascending: false })
+      .returns<MeetingNoteRow[]>(),
+    supabase
+      .from("meeting_attendees")
+      .select("id, meeting_id, user_id, created_at, user:users(*)")
+      .eq("meeting_id", meetingId)
+      .order("created_at", { ascending: true })
+      .returns<Array<MeetingAttendeeRow & { user: UserRow | null }>>(),
+    supabase
+      .from("meeting_agenda_items")
+      .select("*")
+      .eq("meeting_id", meetingId)
+      .order("position", { ascending: true })
+      .returns<MeetingAgendaItemRow[]>()
+  ]);
+
+  if (notes.error) {
+    throw notes.error;
+  }
+
+  if (attendees.error) {
+    throw attendees.error;
+  }
+
+  if (agendaItems.error) {
+    throw agendaItems.error;
+  }
+
+  return {
+    ...meeting,
+    notes: notes.data ?? [],
+    attendees: attendees.data ?? [],
+    agendaItems: agendaItems.data ?? []
+  };
+}
+
+export async function getMeetingActionItems(meetingId: string): Promise<TaskRecord[]> {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("tasks")
+    .select(
+      "id, organization_id, title, description, assigned_to, created_by, source_meeting_id, due_date, status, priority, recurring_rule, created_at, assignee:users(id, full_name, email, avatar_url)"
+    )
+    .eq("source_meeting_id", meetingId)
+    .order("created_at", { ascending: false })
+    .returns<TaskRecord[]>();
 
   if (error) {
     throw error;
