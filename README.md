@@ -141,9 +141,10 @@ SocOS/
 
 This project uses the Next.js App Router.
 
-- `app/page.tsx` redirects `/` to `/dashboard`
-- `app/login/page.tsx` is the public login/landing page
+- `app/page.tsx` is the public marketing landing page
+- `app/login/page.tsx` is the public authentication page
 - `app/auth/callback/route.ts` handles Supabase auth code exchange
+- `app/reset-password/page.tsx` handles secure password updates after recovery email links
 - `app/(app)/layout.tsx` is the authenticated shell wrapper
 - `app/(app)/*` contains the protected product routes
 - `app/onboarding/page.tsx` is the first-time setup flow for authenticated users with no memberships
@@ -499,22 +500,17 @@ Note on fonts:
 
 ## How login works right now
 
-The current UI is a foundation, not a complete auth flow. The login page explains where Supabase Auth should connect, but it does not yet render provider buttons or an email/password form wired to Supabase.
+Authentication is fully wired through Supabase Auth.
 
-The backend flow is ready for the callback stage:
+The current flow is:
 
-1. A user signs in via Supabase Auth.
-2. Supabase redirects back to `/auth/callback` with an auth code.
-3. [`app/auth/callback/route.ts`](/Users/harveyallen/Documents/Projects/SocOS/app/auth/callback/route.ts) exchanges that code for a session.
-4. Middleware refreshes the session and protects app routes.
-5. The new-user trigger inserts a row into `public.users`.
-
-To finish auth UI in a future iteration, you would typically:
-
-- add a client-side auth form or OAuth buttons on `/login`
-- call the browser Supabase client from `lib/supabase/client.ts`
-- redirect to Supabase’s auth flow
-- return to `/auth/callback`
+1. A user signs in on `/login` with email and password.
+2. New users can create an account on `/login`, which writes profile metadata into `auth.users`.
+3. The `handle_new_user()` trigger inserts the matching row into `public.users`.
+4. Password recovery emails redirect through `/auth/callback` into `/reset-password`.
+5. [`app/auth/callback/route.ts`](/Users/harveyallen/Documents/Projects/SocOS/app/auth/callback/route.ts) exchanges the Supabase auth code for a session and only allows safe internal redirects.
+6. Middleware refreshes the session and protects app routes.
+7. Authenticated users without memberships are sent to `/onboarding`; users with memberships land in `/dashboard`.
 
 ## How the authenticated shell works
 
@@ -656,8 +652,9 @@ Once features are added, end users will be able to:
 
 - [`app/layout.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/layout.tsx): root HTML layout and metadata
 - [`app/globals.css`](/Users/harveyallen/Documents/Projects/SocOS/app/globals.css): global Tailwind styles and CSS variables
-- [`app/page.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/page.tsx): redirects to the dashboard
-- [`app/login/page.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/login/page.tsx): public login/marketing shell
+- [`app/page.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/page.tsx): public marketing landing page
+- [`app/login/page.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/login/page.tsx): public authentication page
+- [`app/reset-password/page.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/reset-password/page.tsx): password recovery completion page
 - [`app/(app)/layout.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/(app)/layout.tsx): authenticated layout with membership gating
 - [`app/onboarding/page.tsx`](/Users/harveyallen/Documents/Projects/SocOS/app/onboarding/page.tsx): membership-empty onboarding gate
 - [`components/onboarding/OnboardingWizard.tsx`](/Users/harveyallen/Documents/Projects/SocOS/components/onboarding/OnboardingWizard.tsx): multi-step org creation, invite, and template flow
@@ -720,7 +717,6 @@ npm run lint
 
 ## Known limitations of the current foundation
 
-- The login page is not yet wired to a real Supabase auth form or OAuth provider buttons.
 - The command menu navigates to section routes, but most non-meeting detail pages do not exist yet.
 - There are no mutation helpers or server actions yet.
 - There is no Supabase CLI project configuration or migration history yet.
@@ -731,12 +727,10 @@ npm run lint
 
 ## Recommended next implementation steps
 
-1. Add a real login/signup flow on `/login`.
-2. Add invitation delivery and acceptance flows.
-3. Replace the remaining route stubs with real CRUD pages for announcements, events, resources, handovers, and members.
-4. Add schema migrations and local Supabase CLI support.
-5. Add tests for auth flows, middleware, onboarding, task flows, meeting flows, org context persistence, and dashboard queries.
-6. Add notification data, real search ranking, and richer analytics widgets.
+1. Add invitation delivery and acceptance flows.
+2. Add schema migrations and local Supabase CLI support.
+3. Add tests for auth flows, middleware, onboarding, task flows, meeting flows, org context persistence, and dashboard queries.
+4. Add notification data, real search ranking, and richer analytics widgets.
 
 ## Keeping this README current
 

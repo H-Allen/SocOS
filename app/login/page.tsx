@@ -1,10 +1,19 @@
 import Link from "next/link";
-import { ArrowRight, ShieldCheck, Users } from "lucide-react";
+import { ShieldCheck, Users } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AuthPanel } from "@/components/auth/AuthPanel";
+import { getSafeRedirectPath } from "@/lib/auth";
 
-export default function LoginPage() {
+export default function LoginPage({
+  searchParams
+}: {
+  searchParams?: {
+    next?: string;
+    mode?: string;
+    error?: string;
+  };
+}) {
+  const nextPath = getSafeRedirectPath(searchParams?.next, "/dashboard");
   return (
     <main className="bg-grid flex min-h-screen items-center justify-center px-4 py-12">
       <div className="grid w-full max-w-5xl gap-8 lg:grid-cols-[1.1fr_0.9fr]">
@@ -37,30 +46,7 @@ export default function LoginPage() {
           </div>
         </section>
 
-        <Card className="bg-[color-mix(in_srgb,var(--surface)_96%,transparent)] shadow-2xl shadow-black/20">
-          <CardHeader>
-            <CardTitle>Sign in</CardTitle>
-            <CardDescription>
-              Connect this page to Supabase auth providers once your project keys are configured.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Button className="w-full justify-between">
-              Continue with Supabase Auth
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-            <p className="text-sm text-[var(--text-secondary)]">
-              After authentication, users are redirected to their organization dashboard with session refresh
-              handled in middleware.
-            </p>
-            <Link
-              href="/dashboard"
-              className="inline-flex h-10 w-full items-center justify-center rounded-lg border border-border bg-[var(--surface)] px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-[var(--surface-2)]"
-            >
-              Preview dashboard shell
-            </Link>
-          </CardContent>
-        </Card>
+        <AuthPanel nextPath={nextPath} />
       </div>
     </main>
   );
