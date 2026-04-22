@@ -37,6 +37,17 @@ create table if not exists public.memberships (
   unique (user_id, organization_id)
 );
 
+create table if not exists public.organization_roles (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations (id) on delete cascade,
+  name text not null,
+  permission_level text not null check (permission_level in ('admin', 'committee', 'member')),
+  created_at timestamptz default now()
+);
+
+create unique index if not exists organization_roles_org_name_key
+  on public.organization_roles (organization_id, lower(name));
+
 create table if not exists public.tasks (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations (id) on delete cascade,
@@ -253,6 +264,7 @@ $$;
 alter table public.users enable row level security;
 alter table public.organizations enable row level security;
 alter table public.memberships enable row level security;
+alter table public.organization_roles enable row level security;
 alter table public.tasks enable row level security;
 alter table public.meetings enable row level security;
 alter table public.meeting_notes enable row level security;
@@ -313,6 +325,27 @@ create policy "memberships_select_members"
   on public.memberships
   for select
   using (public.is_org_member(organization_id));
+
+create policy "organization_roles_select_members"
+  on public.organization_roles
+  for select
+  using (public.is_org_member(organization_id));
+
+create policy "organization_roles_insert_managers"
+  on public.organization_roles
+  for insert
+  with check (public.can_manage_org(organization_id));
+
+create policy "organization_roles_update_managers"
+  on public.organization_roles
+  for update
+  using (public.can_manage_org(organization_id))
+  with check (public.can_manage_org(organization_id));
+
+create policy "organization_roles_delete_managers"
+  on public.organization_roles
+  for delete
+  using (public.can_manage_org(organization_id));
 
 create policy "memberships_insert_managers"
   on public.memberships

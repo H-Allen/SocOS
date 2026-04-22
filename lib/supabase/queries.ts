@@ -14,6 +14,7 @@ import type {
   MembershipRow,
   MeetingRow,
   OrganizationRow,
+  OrganizationRoleRecord,
   PermissionLevel,
   OrganizationWithMembership,
   ResourceRecord,
@@ -89,6 +90,22 @@ export async function getOrganization(orgId: string): Promise<OrganizationRow | 
   }
 
   return data;
+}
+
+export async function getOrganizationRoles(orgId: string): Promise<OrganizationRoleRecord[]> {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("organization_roles")
+    .select("*")
+    .eq("organization_id", orgId)
+    .order("created_at", { ascending: true })
+    .returns<OrganizationRoleRecord[]>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data ?? [];
 }
 
 export async function getOrgMembers(

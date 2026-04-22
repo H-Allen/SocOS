@@ -9,6 +9,7 @@ import type {
   MeetingRow,
   MembershipRole,
   InviteRow,
+  OrganizationRoleRow,
   OrganizationRow,
   PermissionLevel,
   ResourceRow,
@@ -22,6 +23,8 @@ export interface OrganizationWithMembership extends OrganizationRow {
     permission_level: PermissionLevel;
   };
 }
+
+export interface OrganizationRoleRecord extends OrganizationRoleRow {}
 
 export interface TaskWithAssignee extends TaskRow {
   assignee: UserRow | null;

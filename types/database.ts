@@ -41,6 +41,14 @@ export interface MembershipRow {
   joined_at: string | null;
 }
 
+export interface OrganizationRoleRow {
+  id: string;
+  organization_id: string;
+  name: string;
+  permission_level: PermissionLevel;
+  created_at: string | null;
+}
+
 export interface TaskRow {
   id: string;
   organization_id: string;
@@ -163,6 +171,7 @@ type Tables = {
   users: UserRow;
   organizations: OrganizationRow;
   memberships: MembershipRow;
+  organization_roles: OrganizationRoleRow;
   tasks: TaskRow;
   meetings: MeetingRow;
   meeting_notes: MeetingNoteRow;
@@ -195,15 +204,23 @@ type InsertShape<T extends keyof Tables> =
           created_by?: string | null;
           created_at?: string | null;
         }
-      : T extends "memberships"
-        ? {
-            id?: string;
-            user_id: string;
-            organization_id: string;
-            role: MembershipRole;
-            permission_level: PermissionLevel;
-            joined_at?: string | null;
-          }
+        : T extends "memberships"
+          ? {
+              id?: string;
+              user_id: string;
+              organization_id: string;
+              role: MembershipRole;
+              permission_level: PermissionLevel;
+              joined_at?: string | null;
+            }
+        : T extends "organization_roles"
+          ? {
+              id?: string;
+              organization_id: string;
+              name: string;
+              permission_level: PermissionLevel;
+              created_at?: string | null;
+            }
         : T extends "tasks"
           ? {
               id?: string;
@@ -343,6 +360,11 @@ export interface Database {
         Row: MembershipRow;
         Insert: InsertShape<"memberships">;
         Update: UpdateShape<"memberships">;
+      };
+      organization_roles: {
+        Row: OrganizationRoleRow;
+        Insert: InsertShape<"organization_roles">;
+        Update: UpdateShape<"organization_roles">;
       };
       tasks: {
         Row: TaskRow;
