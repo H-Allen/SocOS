@@ -7,7 +7,9 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
 
-import { ACTIVE_ORG_COOKIE, ACTIVE_ORG_STORAGE_KEY } from "@/lib/org-state";
+import { sendInvites, type InviteResult } from "@/app/actions/invite";
+import { createOrganizationWithMembership, seedTemplate } from "@/app/actions/onboarding";
+import { ACTIVE_ORG_STORAGE_KEY } from "@/lib/org-state";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,11 +33,7 @@ type OnboardingWizardProps = {
   userName: string | null;
 };
 
-type InviteStatus = {
-  email: string;
-  status: "success" | "duplicate" | "error";
-  message: string;
-};
+type InviteStatus = InviteResult;
 
 type TemplateDefinition = {
   label: string;
@@ -172,7 +170,6 @@ function toIso(date: Date) {
 export function OnboardingWizard({ userId, userName }: OnboardingWizardProps) {
   const router = useRouter();
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
-  const writeClient = supabase as any;
   const [step, setStep] = useState(1);
   const [isPending, startTransition] = useTransition();
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -199,38 +196,33 @@ export function OnboardingWizard({ userId, userName }: OnboardingWizardProps) {
     setIsSubmitting("signup");
 
     try {
+      // Upload logo from browser (storage operation — types correctly with browser client)
       let logoUrl: string | null = null;
       if (logoFile) {
         const fileExt = logoFile.name.split(".").pop() ?? "png";
         const filePath = `${userId}/${Date.now()}.${fileExt}`;
-        const { error: uploadError } = await writeClient.storage.from("org-logos").upload(filePath, logoFile);
+        const { error: uploadError } = await supabase.storage.from("org-logos").upload(filePath, logoFile);
         if (uploadError) throw uploadError;
-        const { data } = writeClient.storage.from("org-logos").getPublicUrl(filePath);
+        const { data } = supabase.storage.from("org-logos").getPublicUrl(filePath);
         logoUrl = data.publicUrl;
       }
 
-      const { data: createdOrg, error: orgError } = await writeClient
-        .from("organizations")
-        .insert({ name: values.name, university: values.university, type: values.type, logo_url: logoUrl, created_by: userId })
-        .select("*")
-        .single();
-
-      if (orgError) throw orgError;
-
-      const { error: memError } = await writeClient.from("memberships").insert({
-        user_id: userId,
-        organization_id: createdOrg.id,
-        role: "president",
-        permission_level: "admin"
+      // All Postgres writes happen in a Server Action (typed correctly server-side)
+      const { organizationId: newOrgId, error: createError } = await createOrganizationWithMembership({
+        name: values.name,
+        university: values.university,
+        type: values.type,
+        logoUrl,
+        userId
       });
 
-      if (memError) throw memError;
+      if (createError) throw new Error(createError);
 
-      setOrganizationId(createdOrg.id);
+      setOrganizationId(newOrgId);
       setStep(2);
     } catch (e) {
       console.error(e);
-      setErrorMessage("Failed to create organization. Please try again.");
+      setErrorMessage(e instanceof Error ? e.message : "Failed to create organization. Please try again.");
     } finally {
       setIsSubmitting(null);
     }
@@ -256,60 +248,16 @@ export function OnboardingWizard({ userId, userName }: OnboardingWizardProps) {
         return;
       }
 
-      const statuses = await Promise.all(
-        emails.map(async (email) => {
-          const parsed = z.string().email().safeParse(email);
+      // Use the Server Action — validates permissions, caps at 20,
+      // stores invite records, and dispatches real Supabase Auth invite emails.
+      const { results, error } = await sendInvites(organizationId, emails);
 
-          if (!parsed.success) {
-            return {
-              email,
-              status: "error" as const,
-              message: "Invalid email format"
-            };
-          }
+      if (error) {
+        setErrorMessage(error);
+        return;
+      }
 
-          const result = await writeClient.from("invites").insert({
-            organization_id: organizationId,
-            email,
-            invited_by: userId,
-            status: "pending"
-          });
-
-          if (!result.error) {
-            return {
-              email,
-              status: "success" as const,
-              message: "Invitation queued"
-            };
-          }
-
-          if (result.error.message.toLowerCase().includes("duplicate") || result.error.code === "23505") {
-            return {
-              email,
-              status: "duplicate" as const,
-              message: "Invite already exists"
-            };
-          }
-
-          return {
-            email,
-            status: "error" as const,
-            message: "Could not create invite"
-          };
-        })
-      );
-
-      setInviteStatuses(statuses);
-
-      await writeClient.from("activity_logs").insert({
-        organization_id: organizationId,
-        actor_user_id: userId,
-        action: `queued ${statuses.filter((item) => item.status === "success").length} team invites`,
-        metadata: {
-          invited: statuses.map((item) => ({ email: item.email, status: item.status }))
-        }
-      });
-
+      setInviteStatuses(results);
       setStep(3);
     });
   };
@@ -324,61 +272,25 @@ export function OnboardingWizard({ userId, userName }: OnboardingWizardProps) {
       setErrorMessage(null);
 
       const template = templateSeeds[selectedTemplate];
-      const now = new Date();
-      const meetingStart = addDays(now, template.meeting.startOffsetDays);
-      const meetingEnd = new Date(meetingStart);
-      meetingEnd.setHours(meetingEnd.getHours() + 1);
 
-      const tasksInsert = template.tasks.map((task) => ({
-        organization_id: organizationId,
-        title: task.title,
-        description: task.description,
-        assigned_to: userId,
-        created_by: userId,
-        due_date: toDateOnly(addDays(now, task.dueOffsetDays)),
-        status: "todo" as const,
-        priority: task.priority
-      }));
+      // All DB writes via Server Action — correctly typed server-side
+      const { error: seedError } = await seedTemplate({
+        organizationId,
+        userId,
+        templateKey: selectedTemplate,
+        tasks: template.tasks,
+        meeting: template.meeting,
+        handoverRoles: template.handovers,
+        announcement: template.announcement
+      });
 
-      const handoversInsert = template.handovers.map((roleName) => ({
-        organization_id: organizationId,
-        role_name: roleName
-      }));
-
-      const [tasksResult, meetingResult, handoverResult, announcementResult, activityResult] = await Promise.all([
-        writeClient.from("tasks").insert(tasksInsert),
-        writeClient.from("meetings").insert({
-          organization_id: organizationId,
-          title: template.meeting.title,
-          description: template.meeting.description,
-          start_time: toIso(meetingStart),
-          end_time: toIso(meetingEnd),
-          created_by: userId
-        }),
-        writeClient.from("handovers").insert(handoversInsert),
-        writeClient.from("announcements").insert({
-          organization_id: organizationId,
-          title: template.announcement.title,
-          content: template.announcement.content,
-          pinned: true,
-          created_by: userId
-        }),
-        writeClient.from("activity_logs").insert({
-          organization_id: organizationId,
-          actor_user_id: userId,
-          action: `completed onboarding with the ${selectedTemplate.replace("_", " ")} template`,
-          metadata: {
-            template: selectedTemplate
-          }
-        })
-      ]);
-
-      const firstError = [tasksResult.error, meetingResult.error, handoverResult.error, announcementResult.error, activityResult.error].find(Boolean);
-
-      if (firstError) {
-        setErrorMessage(firstError.message);
+      if (seedError) {
+        setErrorMessage(seedError);
         return;
       }
+
+      // Persist active org so the dashboard loads into the right org
+      window.localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, organizationId);
 
       router.push("/dashboard");
       router.refresh();

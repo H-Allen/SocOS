@@ -79,7 +79,9 @@ export interface MeetingNoteRow {
   id: string;
   meeting_id: string;
   content: string | null;
+  updated_by: string | null;
   created_at: string | null;
+  updated_at: string | null;
 }
 
 export interface MeetingAttendeeRow {
@@ -252,7 +254,9 @@ type InsertShape<T extends keyof Tables> =
                   id?: string;
                   meeting_id: string;
                   content?: string | null;
+                  updated_by?: string | null;
                   created_at?: string | null;
+                  updated_at?: string | null;
                 }
               : T extends "meeting_attendees"
                 ? {

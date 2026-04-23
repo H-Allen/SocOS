@@ -59,6 +59,50 @@ export async function getCurrentUser(): Promise<UserRow | null> {
   return data;
 }
 
+/**
+ * Fetches the current user profile AND their org memberships in a single
+ * auth.getUser() call followed by two parallelised DB queries.
+ * Use this in layouts/pages that need both, instead of calling
+ * getCurrentUser() + getUserMemberships() separately.
+ */
+export async function getUserWithMemberships(): Promise<{
+  user: UserRow | null;
+  memberships: OrganizationWithMembership[];
+}> {
+  const supabase = createServerSupabaseClient();
+  const {
+    data: { user: authUser },
+    error: authError
+  } = await supabase.auth.getUser();
+
+  if (authError || !authUser) {
+    return { user: null, memberships: [] };
+  }
+
+  const [userResult, membershipsResult] = await Promise.all([
+    supabase.from("users").select("*").eq("id", authUser.id).maybeSingle(),
+    supabase
+      .from("memberships")
+      .select("role, permission_level, organization:organizations(*)")
+      .eq("user_id", authUser.id)
+      .returns<Array<{ role: MembershipRole; permission_level: PermissionLevel; organization: OrganizationRow }>>()
+  ]);
+
+  if (userResult.error) throw userResult.error;
+  if (membershipsResult.error) throw membershipsResult.error;
+
+  const memberships = (membershipsResult.data ?? []).map((m) => ({
+    ...(m.organization as OrganizationRow),
+    membership: {
+      role: m.role,
+      permission_level: m.permission_level
+    }
+  }));
+
+  return { user: userResult.data, memberships };
+}
+
+
 export async function getUserMemberships(): Promise<OrganizationWithMembership[]> {
   const user = await getCurrentUser();
 
@@ -291,7 +335,7 @@ export async function getHealthCounts(orgId: string) {
       .from("handovers")
       .select("id", { count: "exact", head: true })
       .eq("organization_id", orgId)
-      .eq("completion_percent", 0),
+      .lt("completion_percent", 100),
     supabase.from("memberships").select("id", { count: "exact", head: true }).eq("organization_id", orgId),
     supabase
       .from("meetings")

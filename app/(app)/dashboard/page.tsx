@@ -7,27 +7,16 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getServerActiveOrganization } from "@/lib/org-server";
 import {
-  getCurrentUser,
   getDashboardAnnouncements,
   getDashboardTasks,
   getHealthCounts,
   getRecentActivity,
   getUpcomingMeetings,
-  getUserMemberships
+  getUserWithMemberships
 } from "@/lib/supabase/queries";
+import { getInitials } from "@/lib/workspace";
 import { formatDate, formatDateTime, formatLongDate, formatRelativeTime, getTimeBasedGreeting, truncateText } from "@/utils/format";
 import { cn } from "@/utils/cn";
-
-function getInitials(name: string | null, email: string | null) {
-  const value = name ?? email ?? "User";
-
-  return value
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
 
 function formatOrgType(value: string | null) {
   if (!value) {
@@ -53,7 +42,7 @@ function priorityColor(priority: string | null) {
 }
 
 export default async function DashboardPage() {
-  const [user, memberships] = await Promise.all([getCurrentUser(), getUserMemberships()]);
+  const { user, memberships } = await getUserWithMemberships();
 
   if (!user) {
     redirect("/login");

@@ -78,8 +78,29 @@ create table if not exists public.meeting_notes (
   id uuid primary key default gen_random_uuid(),
   meeting_id uuid not null references public.meetings (id) on delete cascade,
   content text,
-  created_at timestamptz default now()
+  updated_by uuid references public.users (id),
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
 );
+
+alter table public.meeting_notes
+  add column if not exists updated_by uuid references public.users (id);
+
+alter table public.meeting_notes
+  add column if not exists updated_at timestamptz default now();
+
+create or replace function public.set_updated_at()
+returns trigger language plpgsql as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists meeting_notes_updated_at on public.meeting_notes;
+create trigger meeting_notes_updated_at
+  before update on public.meeting_notes
+  for each row execute procedure public.set_updated_at();
 
 create table if not exists public.meeting_attendees (
   id uuid primary key default gen_random_uuid(),
@@ -643,26 +664,63 @@ insert into storage.buckets (id, name, public)
 values ('org-logos', 'org-logos', true)
 on conflict (id) do nothing;
 
+drop policy if exists "org_logos_public_read" on storage.objects;
 create policy "org_logos_public_read"
   on storage.objects
   for select
   using (bucket_id = 'org-logos');
 
+drop policy if exists "org_logos_authenticated_insert" on storage.objects;
 create policy "org_logos_authenticated_insert"
   on storage.objects
   for insert
   to authenticated
   with check (bucket_id = 'org-logos');
 
+drop policy if exists "org_logos_authenticated_update" on storage.objects;
 create policy "org_logos_authenticated_update"
   on storage.objects
   for update
   to authenticated
-  using (bucket_id = 'org-logos')
-  with check (bucket_id = 'org-logos');
+  -- Only allow updating objects inside the authenticated user's own folder
+  using (bucket_id = 'org-logos' and (storage.foldername(name))[1] = auth.uid()::text)
+  with check (bucket_id = 'org-logos' and (storage.foldername(name))[1] = auth.uid()::text);
 
+drop policy if exists "org_logos_authenticated_delete" on storage.objects;
 create policy "org_logos_authenticated_delete"
   on storage.objects
   for delete
   to authenticated
   using (bucket_id = 'org-logos');
+
+-- ============================================================
+-- Performance indexes on hot query paths
+-- ============================================================
+
+-- Tasks: filter by org + assignee + status, sort by due_date
+create index if not exists idx_tasks_org_assignee_status_due
+  on public.tasks (organization_id, assigned_to, status, due_date asc nulls last);
+
+-- Tasks: filter by org alone (org-level task list)
+create index if not exists idx_tasks_org_created
+  on public.tasks (organization_id, created_at desc);
+
+-- Meetings: filter by org + time window (upcoming / past)
+create index if not exists idx_meetings_org_start
+  on public.meetings (organization_id, start_time asc);
+
+-- Activity logs: filter by org, sort by time (recent activity feed)
+create index if not exists idx_activity_logs_org_created
+  on public.activity_logs (organization_id, created_at desc);
+
+-- Announcements: filter by org, sort pinned-first then newest
+create index if not exists idx_announcements_org_pinned_created
+  on public.announcements (organization_id, pinned desc, created_at desc);
+
+-- Handovers: filter by org + completion (health counts)
+create index if not exists idx_handovers_org_completion
+  on public.handovers (organization_id, completion_percent);
+
+-- Invites: look up pending invites by email on sign-in
+create index if not exists idx_invites_email_status
+  on public.invites (email, status);

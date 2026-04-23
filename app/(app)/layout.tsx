@@ -3,22 +3,18 @@ import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { OrgProvider } from "@/lib/org-context";
 import { getServerActiveOrganization } from "@/lib/org-server";
-import { getCurrentUser, getUserMemberships } from "@/lib/supabase/queries";
+import { getUserWithMemberships } from "@/lib/supabase/queries";
 
 export default async function AuthenticatedLayout({
   children
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const user = await getCurrentUser();
+  const { user, memberships } = await getUserWithMemberships();
 
   if (!user) {
-    // If the user has a session but no profile, they should sign in again
-    // to trigger profile creation or be caught by middleware.
     redirect("/login");
   }
-
-  const memberships = await getUserMemberships();
 
   if (!memberships.length) {
     redirect("/onboarding");
@@ -36,3 +32,4 @@ export default async function AuthenticatedLayout({
     </OrgProvider>
   );
 }
+

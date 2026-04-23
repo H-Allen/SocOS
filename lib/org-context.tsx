@@ -1,8 +1,9 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, useTransition } from "react";
 
-import { ACTIVE_ORG_COOKIE, ACTIVE_ORG_STORAGE_KEY, resolveActiveOrganization } from "@/lib/org-state";
+import { setActiveOrg } from "@/app/actions/set-active-org";
+import { ACTIVE_ORG_STORAGE_KEY, resolveActiveOrganization } from "@/lib/org-state";
 import type { OrganizationWithMembership } from "@/types";
 
 type OrgContextValue = {
@@ -19,13 +20,9 @@ type OrgProviderProps = {
   children: React.ReactNode;
 };
 
-function persistActiveOrganizationSelection(organizationId: string) {
-  window.localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, organizationId);
-  document.cookie = `${ACTIVE_ORG_COOKIE}=${organizationId}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
-}
-
 export function OrgProvider({ memberships, initialOrgId, children }: OrgProviderProps) {
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(initialOrgId ?? memberships[0]?.id ?? null);
+  const [, startTransition] = useTransition();
 
   useEffect(() => {
     if (!memberships.length) {
@@ -37,8 +34,12 @@ export function OrgProvider({ memberships, initialOrgId, children }: OrgProvider
     const nextOrgId = resolveActiveOrganization(memberships, storedOrgId ?? initialOrgId)?.id ?? memberships[0].id;
 
     setCurrentOrgId(nextOrgId);
+
     if (nextOrgId) {
-      persistActiveOrganizationSelection(nextOrgId);
+      // Keep localStorage as a client-side hint for immediate UI updates
+      window.localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, nextOrgId);
+      // Set the HttpOnly cookie via a Server Action (XSS-safe)
+      startTransition(() => { setActiveOrg(nextOrgId); });
     }
   }, [initialOrgId, memberships]);
 
@@ -50,7 +51,10 @@ export function OrgProvider({ memberships, initialOrgId, children }: OrgProvider
       memberships,
       setCurrentOrg: (organizationId: string) => {
         setCurrentOrgId(organizationId);
-        persistActiveOrganizationSelection(organizationId);
+        // Update client-side hint immediately for snappy UI
+        window.localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, organizationId);
+        // Persist the HttpOnly cookie server-side
+        startTransition(() => { setActiveOrg(organizationId); });
       }
     };
   }, [currentOrgId, memberships]);
@@ -67,3 +71,4 @@ export function useOrg() {
 
   return context;
 }
+
