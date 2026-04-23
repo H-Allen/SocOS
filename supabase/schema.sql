@@ -23,7 +23,7 @@ create table if not exists public.organizations (
     )
   ),
   logo_url text,
-  created_by uuid references public.users (id),
+  created_by uuid references auth.users (id),
   created_at timestamptz default now()
 );
 
@@ -297,14 +297,20 @@ create policy "users_update_self"
   using (auth.uid() = id)
   with check (auth.uid() = id);
 
+create policy "users_insert_self"
+  on public.users
+  for insert
+  with check (auth.uid() = id);
+
 create policy "organizations_select_members"
   on public.organizations
   for select
   using (public.is_org_member(id));
 
-create policy "organizations_insert_managers"
+create policy "organizations_insert_authenticated"
   on public.organizations
   for insert
+  to authenticated
   with check (
     auth.uid() = created_by
     or created_by is null
@@ -347,9 +353,10 @@ create policy "organization_roles_delete_managers"
   for delete
   using (public.can_manage_org(organization_id));
 
-create policy "memberships_insert_managers"
+create policy "memberships_insert_owners"
   on public.memberships
   for insert
+  to authenticated
   with check (
     public.can_manage_org(organization_id)
     or exists (
@@ -358,8 +365,6 @@ create policy "memberships_insert_managers"
       where organizations.id = memberships.organization_id
         and organizations.created_by = auth.uid()
         and memberships.user_id = auth.uid()
-        and memberships.permission_level = 'admin'
-        and memberships.role = 'president'
     )
   );
 
@@ -568,10 +573,19 @@ create policy "activity_logs_select_members"
   for select
   using (public.is_org_member(organization_id));
 
-create policy "activity_logs_insert_managers"
+create policy "activity_logs_insert_owners"
   on public.activity_logs
   for insert
-  with check (public.can_manage_org(organization_id));
+  to authenticated
+  with check (
+    public.can_manage_org(organization_id)
+    or exists (
+      select 1
+      from public.organizations
+      where organizations.id = organization_id
+        and organizations.created_by = auth.uid()
+    )
+  );
 
 create policy "activity_logs_update_managers"
   on public.activity_logs

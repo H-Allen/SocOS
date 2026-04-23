@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/utils/cn";
 import type { OrganizationType } from "@/types";
@@ -177,6 +178,7 @@ export function OnboardingWizard({ userId, userName }: OnboardingWizardProps) {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [inviteInput, setInviteInput] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState<"signup" | null>(null);
   const [inviteStatuses, setInviteStatuses] = useState<InviteStatus[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateDefinition["value"] | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -192,76 +194,46 @@ export function OnboardingWizard({ userId, userName }: OnboardingWizardProps) {
 
   const progress = (step / 3) * 100;
 
-  const handleCreateOrganization = stepOneForm.handleSubmit((values) => {
-    startTransition(async () => {
-      setErrorMessage(null);
+  const handleCreateOrganization = stepOneForm.handleSubmit(async (values) => {
+    setErrorMessage(null);
+    setIsSubmitting("signup");
 
-      try {
-        let logoUrl: string | null = null;
-
-        if (logoFile) {
-          const fileExt = logoFile.name.split(".").pop() ?? "png";
-          const filePath = `${userId}/${Date.now()}.${fileExt}`;
-          const upload = await writeClient.storage.from("org-logos").upload(filePath, logoFile, {
-            upsert: true
-          });
-
-          if (upload.error) {
-            throw upload.error;
-          }
-
-          const { data: publicUrlData } = writeClient.storage.from("org-logos").getPublicUrl(filePath);
-          logoUrl = publicUrlData.publicUrl;
-        }
-
-        const organizationInsert = await writeClient
-          .from("organizations")
-          .insert({
-            name: values.name,
-            university: values.university,
-            type: values.type,
-            logo_url: logoUrl,
-            created_by: userId
-          })
-          .select("*")
-          .single();
-
-        if (organizationInsert.error) {
-          throw organizationInsert.error;
-        }
-
-        const createdOrg = organizationInsert.data;
-
-        const membershipInsert = await writeClient.from("memberships").insert({
-          user_id: userId,
-          organization_id: createdOrg.id,
-          role: "president",
-          permission_level: "admin"
-        });
-
-        if (membershipInsert.error) {
-          throw membershipInsert.error;
-        }
-
-        await writeClient.from("activity_logs").insert({
-          organization_id: createdOrg.id,
-          actor_user_id: userId,
-          action: "created the organization workspace",
-          metadata: {
-            stage: "onboarding"
-          }
-        });
-
-        window.localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, createdOrg.id);
-        document.cookie = `${ACTIVE_ORG_COOKIE}=${createdOrg.id}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
-
-        setOrganizationId(createdOrg.id);
-        setSelectedTemplate(getTemplateValue(createdOrg.type));
-        setStep(2);
-      } catch (error) {
-        setErrorMessage(error instanceof Error ? error.message : "We couldn't create your organization. Please try again.");
+    try {
+      let logoUrl: string | null = null;
+      if (logoFile) {
+        const fileExt = logoFile.name.split(".").pop() ?? "png";
+        const filePath = `${userId}/${Date.now()}.${fileExt}`;
+        const { error: uploadError } = await writeClient.storage.from("org-logos").upload(filePath, logoFile);
+        if (uploadError) throw uploadError;
+        const { data } = writeClient.storage.from("org-logos").getPublicUrl(filePath);
+        logoUrl = data.publicUrl;
       }
-    });
+
+      const { data: createdOrg, error: orgError } = await writeClient
+        .from("organizations")
+        .insert({ name: values.name, university: values.university, type: values.type, logo_url: logoUrl, created_by: userId })
+        .select("*")
+        .single();
+
+      if (orgError) throw orgError;
+
+      const { error: memError } = await writeClient.from("memberships").insert({
+        user_id: userId,
+        organization_id: createdOrg.id,
+        role: "president",
+        permission_level: "admin"
+      });
+
+      if (memError) throw memError;
+
+      setOrganizationId(createdOrg.id);
+      setStep(2);
+    } catch (e) {
+      console.error(e);
+      setErrorMessage("Failed to create organization. Please try again.");
+    } finally {
+      setIsSubmitting(null);
+    }
   });
 
   const handleInvites = () => {
@@ -447,97 +419,95 @@ export function OnboardingWizard({ userId, userName }: OnboardingWizardProps) {
           <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{errorMessage}</div>
         ) : null}
 
-        {step === 1 ? (
-          <div key="step-1" className="animate-step-in">
-            <Form {...stepOneForm}>
-              <form className="space-y-5" onSubmit={handleCreateOrganization}>
-                <FormField
-                  control={stepOneForm.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Organization name</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="Imperial Formula Student" disabled={Boolean(organizationId) || isPending} className="border-[#d9d9e4] bg-white text-[#111118] placeholder:text-[#9b9ba8] focus-visible:ring-[#6366f1] focus-visible:ring-offset-white" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={stepOneForm.control}
-                  name="university"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>University name</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="University of Bristol" disabled={Boolean(organizationId) || isPending} className="border-[#d9d9e4] bg-white text-[#111118] placeholder:text-[#9b9ba8] focus-visible:ring-[#6366f1] focus-visible:ring-offset-white" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={stepOneForm.control}
-                  name="type"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Type</FormLabel>
-                      <FormControl>
-                        <select
-                          {...field}
-                          disabled={Boolean(organizationId) || isPending}
-                          className="flex h-10 w-full rounded-lg border border-[#d9d9e4] bg-white px-3 py-2 text-sm text-[#111118] outline-none focus:ring-2 focus:ring-[#6366f1]"
-                        >
-                          {organizationTypeOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+        <Form {...stepOneForm}>
+          {step === 1 ? (
+            <form key="step-1" className="animate-step-in space-y-5" onSubmit={handleCreateOrganization}>
+              <FormField
+                control={stepOneForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Organization name</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="Imperial Formula Student" disabled={Boolean(organizationId) || isPending} className="border-[#d9d9e4] bg-white text-[#111118] placeholder:text-[#9b9ba8] focus-visible:ring-[#6366f1] focus-visible:ring-offset-white" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={stepOneForm.control}
+                name="university"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>University name</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="University of Bristol" disabled={Boolean(organizationId) || isPending} className="border-[#d9d9e4] bg-white text-[#111118] placeholder:text-[#9b9ba8] focus-visible:ring-[#6366f1] focus-visible:ring-offset-white" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={stepOneForm.control}
+                name="type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Type</FormLabel>
+                    <FormControl>
+                      <select
+                        {...field}
+                        disabled={Boolean(organizationId) || isPending}
+                        className="flex h-10 w-full rounded-lg border border-[#d9d9e4] bg-white px-3 py-2 text-sm text-[#111118] outline-none focus:ring-2 focus:ring-[#6366f1]"
+                      >
+                        {organizationTypeOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-                <div className="space-y-2">
-                  <FormLabel>Logo upload</FormLabel>
-                  <label className="flex cursor-pointer items-center justify-between rounded-2xl border border-dashed border-[#d9d9e4] bg-[#fafafe] px-4 py-4 transition-colors hover:border-[#b9b9cf]">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eef0ff] text-[#6366f1]">
-                        <ImagePlus className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-[#111118]">{logoFile ? logoFile.name : "Upload organization logo"}</p>
-                        <p className="text-xs text-[#6b6b7a]">Optional. Stored in Supabase Storage.</p>
-                      </div>
+              <div className="space-y-2">
+                <Label>Logo upload</Label>
+                <label className="flex cursor-pointer items-center justify-between rounded-2xl border border-dashed border-[#d9d9e4] bg-[#fafafe] px-4 py-4 transition-colors hover:border-[#b9b9cf]">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eef0ff] text-[#6366f1]">
+                      <ImagePlus className="h-5 w-5" />
                     </div>
-                    <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[#4f46e5]">Choose file</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      disabled={Boolean(organizationId) || isPending}
-                      onChange={(event) => setLogoFile(event.target.files?.[0] ?? null)}
-                    />
-                  </label>
-                </div>
+                    <div>
+                      <p className="text-sm font-medium text-[#111118]">{logoFile ? logoFile.name : "Upload organization logo"}</p>
+                      <p className="text-xs text-[#6b6b7a]">Optional. Stored in Supabase Storage.</p>
+                    </div>
+                  </div>
+                  <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[#4f46e5]">Choose file</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={Boolean(organizationId) || isPending}
+                    onChange={(event) => setLogoFile(event.target.files?.[0] ?? null)}
+                  />
+                </label>
+              </div>
 
-                <div className="flex items-center justify-between pt-4">
-                  <Button type="button" variant="ghost" disabled className="text-[#9b9ba8] hover:bg-transparent hover:text-[#9b9ba8]">
-                    <ArrowLeft className="h-4 w-4" />
-                    Back
-                  </Button>
-                  <Button type="submit" disabled={isPending} className="min-w-[180px] bg-[#6366f1] text-white hover:bg-[#4f46e5]">
-                    <Building2 className="h-4 w-4" />
-                    {organizationId ? "Organization created" : isPending ? "Creating..." : "Create organization"}
-                  </Button>
-                </div>
-              </form>
-            </Form>
-          </div>
-        ) : null}
+              <div className="flex items-center justify-between pt-4">
+                <Button type="button" variant="ghost" disabled className="text-[#9b9ba8] hover:bg-transparent hover:text-[#9b9ba8]">
+                  <ArrowLeft className="h-4 w-4" />
+                  Back
+                </Button>
+                <Button type="submit" disabled={isPending} className="min-w-[180px] bg-[#6366f1] text-white hover:bg-[#4f46e5]">
+                  <Building2 className="h-4 w-4" />
+                  {organizationId ? "Organization created" : isPending ? "Creating..." : "Create organization"}
+                </Button>
+              </div>
+            </form>
+          ) : null}
+        </Form>
 
         {step === 2 ? (
           <div key="step-2" className="animate-step-in space-y-5">
@@ -556,7 +526,7 @@ export function OnboardingWizard({ userId, userName }: OnboardingWizardProps) {
             </div>
 
             <div className="space-y-2">
-              <FormLabel>Email addresses</FormLabel>
+              <Label>Email addresses</Label>
               <Textarea
                 value={inviteInput}
                 onChange={(event) => setInviteInput(event.target.value)}

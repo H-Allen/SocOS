@@ -103,7 +103,7 @@ export function TaskDetailDrawer({
         .from("tasks")
         .update(update)
         .eq("id", localTask.id)
-        .select("id, organization_id, title, description, assigned_to, created_by, source_meeting_id, due_date, status, priority, recurring_rule, created_at, assignee:users(id, full_name, email, avatar_url)")
+        .select("id, organization_id, title, description, assigned_to, created_by, source_meeting_id, due_date, status, priority, recurring_rule, created_at, assignee:users!tasks_assigned_to_fkey(id, full_name, email, avatar_url)")
         .single();
 
       if (!error && data) {

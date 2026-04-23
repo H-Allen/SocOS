@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 type MemberOption = MembershipRow & { user: UserRow | null };
@@ -161,7 +162,7 @@ export function CreateMeetingModal({ open, onOpenChange, orgId, currentUserId, m
               />
             </div>
             <div className="space-y-2">
-              <FormLabel>Invite members</FormLabel>
+              <Label>Invite members</Label>
               <div className="max-h-48 space-y-2 overflow-y-auto rounded-2xl border border-border bg-[var(--surface-2)] p-3">
                 {members.map((member) => {
                   const active = selectedMembers.includes(member.user_id);

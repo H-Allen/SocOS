@@ -32,9 +32,15 @@ export async function updateSession(request: NextRequest) {
     }
   });
 
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim().replace(/^['"]|['"]$/g, "") || "";
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim().replace(/^['"]|['"]$/g, "") || "";
+  const sanitizedUrl = url
+    .replace(/\/rest\/v1\/?$/, "") // Remove /rest/v1 or /rest/v1/
+    .replace(/\/$/, ""); // Remove trailing slash
+
   const supabase = createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    sanitizedUrl,
+    key,
     {
       cookies: {
         get(name: string) {
@@ -74,10 +80,9 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (user && isAuthPath(request.nextUrl.pathname)) {
-    const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/dashboard";
-    redirectUrl.search = "";
-    return NextResponse.redirect(redirectUrl);
+    // Only redirect to dashboard if we are on an auth path but NOT trying to sign up/onboard
+    // To be safe, we let the page handle the logic if the user is authenticated.
+    return response;
   }
 
   return response;

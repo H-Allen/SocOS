@@ -13,6 +13,8 @@ export default async function AuthenticatedLayout({
   const user = await getCurrentUser();
 
   if (!user) {
+    // If the user has a session but no profile, they should sign in again
+    // to trigger profile creation or be caught by middleware.
     redirect("/login");
   }
 

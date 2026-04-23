@@ -24,6 +24,17 @@ import type {
   UserRow
 } from "@/types";
 
+export async function getAuthSession() {
+  const supabase = createServerSupabaseClient();
+  const {
+    data: { user },
+    error
+  } = await supabase.auth.getUser();
+
+  if (error) return null;
+  return user;
+}
+
 export async function getCurrentUser(): Promise<UserRow | null> {
   const supabase = createServerSupabaseClient();
   const {
@@ -39,7 +50,7 @@ export async function getCurrentUser(): Promise<UserRow | null> {
     return null;
   }
 
-  const { data, error } = await supabase.from("users").select("*").eq("id", authUser.id).single();
+  const { data, error } = await supabase.from("users").select("*").eq("id", authUser.id).maybeSingle();
 
   if (error) {
     throw error;
@@ -189,7 +200,7 @@ export async function getDashboardTasks(orgId: string, userId: string): Promise<
   const supabase = createServerSupabaseClient();
   const { data, error } = await supabase
     .from("tasks")
-    .select("id, organization_id, title, description, assigned_to, created_by, due_date, status, priority, recurring_rule, created_at, assignee:users(id, full_name, email, avatar_url, created_at)")
+    .select("id, organization_id, title, description, assigned_to, created_by, due_date, status, priority, recurring_rule, created_at, assignee:users!tasks_assigned_to_fkey(id, full_name, email, avatar_url, created_at)")
     .eq("organization_id", orgId)
     .eq("assigned_to", userId)
     .in("status", ["todo", "in_progress"])
@@ -334,7 +345,7 @@ export async function getOrganizationTasks(orgId: string): Promise<TaskRecord[]>
   const { data, error } = await supabase
     .from("tasks")
     .select(
-      "id, organization_id, title, description, assigned_to, created_by, source_meeting_id, due_date, status, priority, recurring_rule, created_at, assignee:users(id, full_name, email, avatar_url)"
+      "id, organization_id, title, description, assigned_to, created_by, source_meeting_id, due_date, status, priority, recurring_rule, created_at, assignee:users!tasks_assigned_to_fkey(id, full_name, email, avatar_url)"
     )
     .eq("organization_id", orgId)
     .order("created_at", { ascending: false })
@@ -457,7 +468,7 @@ export async function getMeetingActionItems(meetingId: string): Promise<TaskReco
   const { data, error } = await supabase
     .from("tasks")
     .select(
-      "id, organization_id, title, description, assigned_to, created_by, source_meeting_id, due_date, status, priority, recurring_rule, created_at, assignee:users(id, full_name, email, avatar_url)"
+      "id, organization_id, title, description, assigned_to, created_by, source_meeting_id, due_date, status, priority, recurring_rule, created_at, assignee:users!tasks_assigned_to_fkey(id, full_name, email, avatar_url)"
     )
     .eq("source_meeting_id", meetingId)
     .order("created_at", { ascending: false })

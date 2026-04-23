@@ -5,10 +5,15 @@ import type { Database } from "@/types/database";
 
 export function createServerSupabaseClient() {
   const cookieStore = cookies();
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim().replace(/^['"]|['"]$/g, "") || "";
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim().replace(/^['"]|['"]$/g, "") || "";
+  const sanitizedUrl = url
+    .replace(/\/rest\/v1\/?$/, "") // Remove /rest/v1 or /rest/v1/
+    .replace(/\/$/, ""); // Remove trailing slash
 
   return createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    sanitizedUrl,
+    key,
     {
       cookies: {
         get(name: string) {
