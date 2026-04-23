@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { useOrg } from "@/lib/org-context";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -133,6 +134,7 @@ export function Sidebar({ user }: SidebarProps) {
       </nav>
 
       <div className="border-t border-border p-3">
+        <ThemeToggle className="mb-4" />
         <Link
           href={settingsHref}
           className={cn(
