@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { createBrowserBackendClient } from "@/lib/backend/client";
 import {
   DEFAULT_HANDOVER_ROLES,
   getHandoverStatus,
@@ -48,8 +48,8 @@ function cardStyles(status: string) {
 
 export function HandoverVaultIndex({ organizationId, handovers }: HandoverVaultIndexProps) {
   const router = useRouter();
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
-  const client = supabase as any;
+  const backend = useMemo(() => createBrowserBackendClient(), []);
+  const client = backend as any;
   const [bannerVisible, setBannerVisible] = useState(() => {
     if (typeof window === "undefined") {
       return true;

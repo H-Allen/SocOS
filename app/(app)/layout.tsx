@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { OrgProvider } from "@/lib/org-context";
 import { getServerActiveOrganization } from "@/lib/org-server";
-import { getUserWithMemberships } from "@/lib/supabase/queries";
+import { getUserWithMemberships } from "@/lib/backend/queries";
 
 export default async function AuthenticatedLayout({
   children
@@ -32,4 +32,3 @@ export default async function AuthenticatedLayout({
     </OrgProvider>
   );
 }
-

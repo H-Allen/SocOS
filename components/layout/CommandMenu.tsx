@@ -5,7 +5,7 @@ import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { BookOpen, Calendar, CheckSquare, FileText, FolderOpen, Search, Users } from "lucide-react";
 
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { createBrowserBackendClient } from "@/lib/backend/client";
 import { slugifyRole } from "@/lib/handover";
 import { useOrg } from "@/lib/org-context";
 import {
@@ -65,38 +65,38 @@ export function CommandMenu({ open, onOpenChange }: CommandMenuProps) {
       return;
     }
 
-    const supabase = createBrowserSupabaseClient();
+    const backend = createBrowserBackendClient();
     const orgId = currentOrg.id;
 
     async function fetchResults() {
       setLoading(true);
 
       const [tasks, meetings, resources, handovers, members] = await Promise.all([
-        supabase
+        backend
           .from("tasks")
           .select("id, organization_id, title, description, assigned_to, created_by, due_date, status, priority, recurring_rule, created_at")
           .eq("organization_id", orgId)
           .order("created_at", { ascending: false })
           .limit(5),
-        supabase
+        backend
           .from("meetings")
           .select("id, organization_id, title, description, start_time, end_time, created_by, created_at")
           .eq("organization_id", orgId)
           .order("start_time", { ascending: true })
           .limit(5),
-        supabase
+        backend
           .from("resources")
           .select("id, organization_id, title, description, type, file_url, external_url, tags, uploaded_by, created_at")
           .eq("organization_id", orgId)
           .order("created_at", { ascending: false })
           .limit(5),
-        supabase
+        backend
           .from("handovers")
           .select("id, organization_id, role_name, responsibilities, annual_timeline, key_contacts, advice, mistakes, checklist, updated_at")
           .eq("organization_id", orgId)
           .order("updated_at", { ascending: false })
           .limit(5),
-        supabase
+        backend
           .from("memberships")
           .select("id, user_id, organization_id, role, permission_level, joined_at, user:users(id, full_name, email, avatar_url)")
           .eq("organization_id", orgId)

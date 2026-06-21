@@ -13,7 +13,7 @@ import {
   getRecentActivity,
   getUpcomingMeetings,
   getUserWithMemberships
-} from "@/lib/supabase/queries";
+} from "@/lib/backend/queries";
 import { getInitials } from "@/lib/workspace";
 import { formatDate, formatDateTime, formatLongDate, formatRelativeTime, getTimeBasedGreeting, truncateText } from "@/utils/format";
 import { cn } from "@/utils/cn";

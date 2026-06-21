@@ -40,7 +40,7 @@ export default function LoginPage({
               <ShieldCheck className="h-5 w-5 text-primary" />
               <h2 className="mt-3 text-base font-semibold">Tenant-safe by default</h2>
               <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                Supabase auth and row-level security keep each organization’s data isolated.
+                Firebase Auth and Firestore rules keep each organization’s data isolated.
               </p>
             </div>
           </div>

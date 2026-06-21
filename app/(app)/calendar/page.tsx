@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { CalendarWorkspace } from "@/components/calendar/CalendarWorkspace";
 import { Navbar } from "@/components/layout/Navbar";
 import { getServerActiveOrganization } from "@/lib/org-server";
-import { getCurrentUser, getMeetingsByTime, getOrgMembers, getOrganizationEvents, getOrganizationTasks, getUserMemberships } from "@/lib/supabase/queries";
+import { getCurrentUser, getMeetingsByTime, getOrgMembers, getOrganizationEvents, getOrganizationTasks, getUserMemberships } from "@/lib/backend/queries";
 
 export default async function CalendarPage() {
   const [user, memberships] = await Promise.all([getCurrentUser(), getUserMemberships()]);

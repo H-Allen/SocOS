@@ -2,7 +2,8 @@
 
 import { cookies } from "next/headers";
 
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { adminDb } from "@/lib/firebase/admin";
+import { getServerFirebaseUser } from "@/lib/firebase/session";
 import { ACTIVE_ORG_COOKIE } from "@/lib/org-state";
 
 const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
@@ -14,26 +15,15 @@ const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
  * setting the cookie, preventing cookie-stuffing attacks.
  */
 export async function setActiveOrg(organizationId: string): Promise<void> {
-  const supabase = createServerSupabaseClient();
+  const user = await getServerFirebaseUser();
 
-  const {
-    data: { user },
-    error: authError
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
+  if (!user) {
     return;
   }
 
-  // Verify membership before trusting the org ID
-  const { data: membership } = await supabase
-    .from("memberships")
-    .select("id")
-    .eq("organization_id", organizationId)
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const membership = await adminDb.collection("memberships").doc(`${organizationId}_${user.uid}`).get();
 
-  if (!membership) {
+  if (!membership.exists) {
     // Not a member — refuse to set the cookie
     return;
   }

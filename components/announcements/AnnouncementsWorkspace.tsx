@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { createBrowserBackendClient } from "@/lib/backend/client";
 import { canManageWorkspace, getInitials, isAdmin } from "@/lib/workspace";
 import type { AnnouncementRecord, PermissionLevel, UserRow } from "@/types";
 import { formatDateTime, formatRelativeTime } from "@/utils/format";
@@ -33,8 +33,8 @@ const EMPTY_FORM: AnnouncementForm = {
 };
 
 export function AnnouncementsWorkspace({ initialAnnouncements, currentUser, orgId, permissionLevel }: AnnouncementsWorkspaceProps) {
-  const supabase = createBrowserSupabaseClient();
-  const client = supabase as any;
+  const backend = createBrowserBackendClient();
+  const client = backend as any;
   const [announcements, setAnnouncements] = useState(initialAnnouncements);
   const [expanded, setExpanded] = useState<string[]>([]);
   const [postOpen, setPostOpen] = useState(false);

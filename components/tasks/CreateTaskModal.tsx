@@ -5,7 +5,7 @@ import { useMemo, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { createBrowserBackendClient } from "@/lib/backend/client";
 import type { MembershipRow, TaskRecord, UserRow } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -45,8 +45,8 @@ export function CreateTaskModal({
   defaultStatus = "todo",
   onTaskCreated
 }: CreateTaskModalProps) {
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
-  const client = supabase as any;
+  const backend = useMemo(() => createBrowserBackendClient(), []);
+  const client = backend as any;
   const [isPending, startTransition] = useTransition();
   const form = useForm<CreateTaskValues>({
     resolver: zodResolver(createTaskSchema),

@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Editor } from "react-simple-wysiwyg";
+import dynamic from "next/dynamic";
+
+const Editor = dynamic(() => import("react-simple-wysiwyg").then((mod) => mod.default), { ssr: false });
 import { FileText, Filter, FolderPlus, Link as LinkIcon, Plus, Search, StickyNote, Tag, Upload, User2 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -10,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { createBrowserBackendClient } from "@/lib/backend/client";
 import { RESOURCE_CATEGORIES, canManageWorkspace, getInitials, isAdmin } from "@/lib/workspace";
 import type { PermissionLevel, ResourceRecord, ResourceType, UserRow } from "@/types";
 import { formatDate } from "@/utils/format";
@@ -45,6 +47,14 @@ const EMPTY_FORM: ResourceForm = {
   file: null
 };
 
+const getHostLabel = (url: string) => {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
+};
+
 function resourceIcon(type: ResourceType) {
   if (type === "file") {
     return FileText;
@@ -70,8 +80,8 @@ function resourceTypeClasses(type: ResourceType) {
 }
 
 export function ResourcesWorkspace({ initialResources, currentUser, orgId, permissionLevel }: ResourcesWorkspaceProps) {
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
-  const client = supabase as any;
+  const backend = useMemo(() => createBrowserBackendClient(), []);
+  const client = backend as any;
   const canManage = canManageWorkspace(permissionLevel);
   const canCreateCategory = isAdmin(permissionLevel);
   const [resources, setResources] = useState(initialResources);
@@ -136,10 +146,12 @@ export function ResourcesWorkspace({ initialResources, currentUser, orgId, permi
         upsert: false
       });
 
-      if (!upload.error) {
-        const publicUrl = client.storage.from("resources").getPublicUrl(path);
-        fileUrl = publicUrl.data.publicUrl;
+      if (upload.error) {
+        setIsSubmitting(false);
+        return;
       }
+
+      fileUrl = upload.data?.publicUrl ?? upload.data?.signedUrl ?? null;
     }
 
     if (form.type === "note") {
@@ -401,7 +413,7 @@ export function ResourcesWorkspace({ initialResources, currentUser, orgId, permi
                 <Upload className="h-5 w-5 text-[var(--text-secondary)]" />
                 <div>
                   <p className="text-sm font-medium text-foreground">{form.file ? form.file.name : "Choose a file to upload"}</p>
-                  <p className="text-sm text-[var(--text-secondary)]">Uploads to the `resources` Supabase Storage bucket.</p>
+                  <p className="text-sm text-[var(--text-secondary)]">Uploads to Firebase Storage under `resources`.</p>
                 </div>
                 <input type="file" className="hidden" onChange={(event) => setForm((current) => ({ ...current, file: event.target.files?.[0] ?? null }))} />
               </label>
@@ -513,10 +525,3 @@ export function ResourcesWorkspace({ initialResources, currentUser, orgId, permi
     </div>
   );
 }
-  const getHostLabel = (url: string) => {
-    try {
-      return new URL(url).hostname;
-    } catch {
-      return url;
-    }
-  };

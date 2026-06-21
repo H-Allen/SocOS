@@ -9,7 +9,7 @@ import { KanbanBoard } from "@/components/tasks/KanbanBoard";
 import { TaskDetailDrawer } from "@/components/tasks/TaskDetailDrawer";
 import { TaskTable } from "@/components/tasks/TaskTable";
 import { Button } from "@/components/ui/button";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { createBrowserBackendClient } from "@/lib/backend/client";
 
 type MemberOption = MembershipRow & { user: UserRow | null };
 
@@ -26,8 +26,8 @@ export function TasksWorkspace({ initialTasks, members, currentUser, currentOrg 
   const [selectedTask, setSelectedTask] = useState<TaskRecord | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [defaultStatus, setDefaultStatus] = useState<"todo" | "in_progress" | "done">("todo");
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
-  const client = supabase as any;
+  const backend = useMemo(() => createBrowserBackendClient(), []);
+  const client = backend as any;
   const currentMembership = currentOrg.membership.permission_level;
   const canDelete = currentMembership === "admin" || currentMembership === "committee";
 

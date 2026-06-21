@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { MeetingsWorkspace } from "@/components/meetings/MeetingsWorkspace";
 import { Navbar } from "@/components/layout/Navbar";
 import { getServerActiveOrganization } from "@/lib/org-server";
-import { getCurrentUser, getMeetingsByTime, getOrgMembers, getUserMemberships } from "@/lib/supabase/queries";
+import { getCurrentUser, getMeetingsByTime, getOrgMembers, getUserMemberships } from "@/lib/backend/queries";
 
 export default async function MeetingsPage() {
   const [user, memberships] = await Promise.all([getCurrentUser(), getUserMemberships()]);

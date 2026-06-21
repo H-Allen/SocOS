@@ -1,17 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { confirmPasswordReset, verifyPasswordResetCode } from "firebase/auth";
 import { CheckCircle2, KeyRound } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { firebaseAuth } from "@/lib/firebase/client";
 
 export function ResetPasswordPanel() {
   const router = useRouter();
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const searchParams = useSearchParams();
+  const auth = useMemo(() => firebaseAuth, []);
+  const oobCode = searchParams.get("oobCode");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isReady, setIsReady] = useState(false);
@@ -22,16 +25,25 @@ export function ResetPasswordPanel() {
   useEffect(() => {
     let isMounted = true;
 
-    void supabase.auth.getSession().then(({ data }) => {
-      if (isMounted) {
-        setIsReady(Boolean(data.session));
-      }
-    });
+    if (!oobCode) {
+      setIsReady(false);
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    void verifyPasswordResetCode(auth, oobCode)
+      .then(() => {
+        if (isMounted) setIsReady(true);
+      })
+      .catch(() => {
+        if (isMounted) setIsReady(false);
+      });
 
     return () => {
       isMounted = false;
     };
-  }, [supabase.auth]);
+  }, [auth, oobCode]);
 
   const updatePassword = async () => {
     setErrorMessage(null);
@@ -53,19 +65,18 @@ export function ResetPasswordPanel() {
     }
 
     setIsSubmitting(true);
-    const { error } = await supabase.auth.updateUser({
-      password
-    });
-    setIsSubmitting(false);
-
-    if (error) {
-      setErrorMessage(error.message);
+    try {
+      await confirmPasswordReset(auth, oobCode!, password);
+    } catch (error) {
+      setIsSubmitting(false);
+      setErrorMessage(error instanceof Error ? error.message : "Could not update your password.");
       return;
     }
 
-    setSuccessMessage("Password updated successfully. Redirecting you back into the app...");
+    setIsSubmitting(false);
+    setSuccessMessage("Password updated successfully. Redirecting you to sign in...");
     window.setTimeout(() => {
-      router.push("/dashboard");
+      router.push("/login");
       router.refresh();
     }, 1200);
   };

@@ -5,7 +5,7 @@ import { useState, useTransition } from "react";
 import { Bell, ChevronsUpDown, LogOut, Search, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { createBrowserBackendClient } from "@/lib/backend/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { CommandMenu } from "@/components/layout/CommandMenu";
@@ -42,8 +42,8 @@ export function Navbar({ title, user, notificationCount = 0 }: NavbarProps) {
 
   const signOut = () => {
     startTransition(async () => {
-      const supabase = createBrowserSupabaseClient();
-      await supabase.auth.signOut();
+      const backend = createBrowserBackendClient();
+      await backend.auth.signOut();
       router.push("/login");
       router.refresh();
     });

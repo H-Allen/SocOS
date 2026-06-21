@@ -12,7 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { createBrowserBackendClient } from "@/lib/backend/client";
 import { canManageWorkspace, getInitials } from "@/lib/workspace";
 import type { EventRow, MeetingRow, MemberRecord, PermissionLevel, TaskRecord } from "@/types";
 import { formatDateTime } from "@/utils/format";
@@ -69,8 +69,8 @@ const EMPTY_EVENT_FORM: EventForm = {
 
 export function CalendarWorkspace({ meetings, tasks, events, members, orgId, currentUserId, permissionLevel }: CalendarWorkspaceProps) {
   const router = useRouter();
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
-  const client = supabase as any;
+  const backend = useMemo(() => createBrowserBackendClient(), []);
+  const client = backend as any;
   const [calendarEvents, setCalendarEvents] = useState<EventRow[]>(events);
   const [calendarTasks, setCalendarTasks] = useState(tasks);
   const [selectedTask, setSelectedTask] = useState<TaskRecord | null>(null);
@@ -203,10 +203,10 @@ export function CalendarWorkspace({ meetings, tasks, events, members, orgId, cur
               const borderColor = event.source === "meeting" ? "#3b82f6" : event.source === "task" ? "#f59e0b" : "#a855f7";
 
               return {
+                className: "text-foreground font-medium",
                 style: {
                   backgroundColor,
                   border: `1px solid ${borderColor}`,
-                  color: "#111118",
                   borderRadius: "14px",
                   padding: "2px 8px"
                 }

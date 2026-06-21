@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { createBrowserBackendClient } from "@/lib/backend/client";
 import { canManageWorkspace, formatRoleLabel, getInitials, getRoleBadgeClasses, isAdmin } from "@/lib/workspace";
 import type { ActivityLogWithActor, InviteStatus, MemberRecord, MembershipRole, PermissionLevel, TaskRecord } from "@/types";
 import { formatDate, formatRelativeTime } from "@/utils/format";
@@ -33,8 +33,8 @@ const EMPTY_INVITE: InviteForm = {
 };
 
 export function MembersWorkspace({ initialMembers, tasks, orgId, currentUserId, permissionLevel }: MembersWorkspaceProps) {
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
-  const client = supabase as any;
+  const backend = useMemo(() => createBrowserBackendClient(), []);
+  const client = backend as any;
   const [members, setMembers] = useState(initialMembers);
   const [view, setView] = useState<"table" | "grid">("table");
   const [search, setSearch] = useState("");

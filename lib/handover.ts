@@ -1,14 +1,6 @@
 import type { HandoverRow, Json } from "@/types";
 
-export const DEFAULT_HANDOVER_ROLES = [
-  "President",
-  "Secretary",
-  "Treasurer",
-  "Events Lead",
-  "Sponsorship Lead",
-  "Marketing Lead",
-  "Operations Lead"
-] as const;
+export const DEFAULT_HANDOVER_ROLES = ["President", "Secretary", "Treasurer"] as const;
 
 export const HANDOVER_MONTHS = [
   "January",

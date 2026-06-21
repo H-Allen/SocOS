@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { MeetingDetailClient } from "@/components/meetings/MeetingDetailClient";
 import { Navbar } from "@/components/layout/Navbar";
-import { getCurrentUser, getMeetingActionItems, getMeetingDetails, getOrgMembers, getUserMemberships } from "@/lib/supabase/queries";
+import { getCurrentUser, getMeetingActionItems, getMeetingDetails, getOrgMembers, getUserMemberships } from "@/lib/backend/queries";
 
 export default async function MeetingDetailPage({
   params

@@ -4,7 +4,7 @@ import { HandoverDetailClient } from "@/components/handovers/HandoverDetailClien
 import { Navbar } from "@/components/layout/Navbar";
 import { getServerActiveOrganization } from "@/lib/org-server";
 import { slugifyRole } from "@/lib/handover";
-import { getCurrentUser, getOrganizationHandovers, getUserMemberships } from "@/lib/supabase/queries";
+import { getCurrentUser, getOrganizationHandovers, getUserMemberships } from "@/lib/backend/queries";
 
 export default async function HandoverDetailPage({
   params

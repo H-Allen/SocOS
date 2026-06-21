@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState, useTransition } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { setActiveOrg } from "@/app/actions/set-active-org";
 import { ACTIVE_ORG_STORAGE_KEY, resolveActiveOrganization } from "@/lib/org-state";
@@ -23,6 +23,8 @@ type OrgProviderProps = {
 export function OrgProvider({ memberships, initialOrgId, children }: OrgProviderProps) {
   const [currentOrgId, setCurrentOrgId] = useState<string | null>(initialOrgId ?? memberships[0]?.id ?? null);
   const [, startTransition] = useTransition();
+  const lastPersistedOrgIdRef = useRef<string | null>(initialOrgId ?? null);
+  const membershipIds = useMemo(() => memberships.map((membership) => membership.id).join("|"), [memberships]);
 
   useEffect(() => {
     if (!memberships.length) {
@@ -38,10 +40,15 @@ export function OrgProvider({ memberships, initialOrgId, children }: OrgProvider
     if (nextOrgId) {
       // Keep localStorage as a client-side hint for immediate UI updates
       window.localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, nextOrgId);
-      // Set the HttpOnly cookie via a Server Action (XSS-safe)
-      startTransition(() => { setActiveOrg(nextOrgId); });
+
+      if (nextOrgId !== initialOrgId && nextOrgId !== lastPersistedOrgIdRef.current) {
+        lastPersistedOrgIdRef.current = nextOrgId;
+        startTransition(() => {
+          setActiveOrg(nextOrgId);
+        });
+      }
     }
-  }, [initialOrgId, memberships]);
+  }, [initialOrgId, membershipIds, memberships]);
 
   const value = useMemo<OrgContextValue>(() => {
     const currentOrg = resolveActiveOrganization(memberships, currentOrgId);
@@ -53,8 +60,13 @@ export function OrgProvider({ memberships, initialOrgId, children }: OrgProvider
         setCurrentOrgId(organizationId);
         // Update client-side hint immediately for snappy UI
         window.localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, organizationId);
-        // Persist the HttpOnly cookie server-side
-        startTransition(() => { setActiveOrg(organizationId); });
+
+        if (organizationId !== lastPersistedOrgIdRef.current) {
+          lastPersistedOrgIdRef.current = organizationId;
+          startTransition(() => {
+            setActiveOrg(organizationId);
+          });
+        }
       }
     };
   }, [currentOrgId, memberships]);
@@ -71,4 +83,3 @@ export function useOrg() {
 
   return context;
 }
-

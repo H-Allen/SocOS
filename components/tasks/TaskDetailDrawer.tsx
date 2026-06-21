@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
 
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { createBrowserBackendClient } from "@/lib/backend/client";
 import type { ActivityLogWithActor, MembershipRow, TaskRecord, UserRow } from "@/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
@@ -49,15 +49,22 @@ export function TaskDetailDrawer({
   onTaskUpdated,
   onTaskDeleted
 }: TaskDetailDrawerProps) {
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
-  const client = supabase as any;
+  const backend = useMemo(() => createBrowserBackendClient(), []);
+  const client = backend as any;
   const [localTask, setLocalTask] = useState<TaskRecord | null>(task);
   const [activity, setActivity] = useState<ActivityLogWithActor[]>([]);
   const [assigneeFilter, setAssigneeFilter] = useState("");
+  const hasUserEditedRef = useRef(false);
 
   useEffect(() => {
+    hasUserEditedRef.current = false;
     setLocalTask(task);
   }, [task]);
+
+  const updateLocalTask = (nextTask: TaskRecord) => {
+    hasUserEditedRef.current = true;
+    setLocalTask(nextTask);
+  };
 
   useEffect(() => {
     if (!open || !task) {
@@ -84,7 +91,20 @@ export function TaskDetailDrawer({
   }, [client, open, orgId, task]);
 
   useEffect(() => {
-    if (!localTask || !task) {
+    if (!localTask || !task || !hasUserEditedRef.current) {
+      return;
+    }
+
+    const hasChanged =
+      localTask.title !== task.title ||
+      localTask.description !== task.description ||
+      localTask.status !== task.status ||
+      localTask.priority !== task.priority ||
+      localTask.assigned_to !== task.assigned_to ||
+      localTask.due_date !== task.due_date ||
+      localTask.recurring_rule !== task.recurring_rule;
+
+    if (!hasChanged) {
       return;
     }
 
@@ -107,6 +127,7 @@ export function TaskDetailDrawer({
         .single();
 
       if (!error && data) {
+        hasUserEditedRef.current = false;
         onTaskUpdated(data as TaskRecord);
         await client.from("activity_logs").insert({
           organization_id: orgId,
@@ -157,12 +178,12 @@ export function TaskDetailDrawer({
             <div className="space-y-6 p-6">
               <div className="space-y-2">
                 <label className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--text-muted)]">Title</label>
-                <Input value={localTask.title} onChange={(event) => setLocalTask({ ...localTask, title: event.target.value })} />
+                <Input value={localTask.title} onChange={(event) => updateLocalTask({ ...localTask, title: event.target.value })} />
               </div>
 
               <div className="space-y-2">
                 <label className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--text-muted)]">Description</label>
-                <Textarea value={localTask.description ?? ""} onChange={(event) => setLocalTask({ ...localTask, description: event.target.value })} className="min-h-[140px]" />
+                <Textarea value={localTask.description ?? ""} onChange={(event) => updateLocalTask({ ...localTask, description: event.target.value })} className="min-h-[140px]" />
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
@@ -170,7 +191,7 @@ export function TaskDetailDrawer({
                   <label className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--text-muted)]">Status</label>
                   <select
                     value={localTask.status ?? "todo"}
-                    onChange={(event) => setLocalTask({ ...localTask, status: event.target.value as TaskRecord["status"] })}
+                    onChange={(event) => updateLocalTask({ ...localTask, status: event.target.value as TaskRecord["status"] })}
                     className="flex h-10 w-full rounded-lg border border-border bg-[var(--surface)] px-3 text-sm"
                   >
                     <option value="todo">Todo</option>
@@ -182,7 +203,7 @@ export function TaskDetailDrawer({
                   <label className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--text-muted)]">Priority</label>
                   <select
                     value={localTask.priority ?? "medium"}
-                    onChange={(event) => setLocalTask({ ...localTask, priority: event.target.value as TaskRecord["priority"] })}
+                    onChange={(event) => updateLocalTask({ ...localTask, priority: event.target.value as TaskRecord["priority"] })}
                     className="flex h-10 w-full rounded-lg border border-border bg-[var(--surface)] px-3 text-sm"
                   >
                     <option value="low">Low</option>
@@ -195,11 +216,11 @@ export function TaskDetailDrawer({
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <label className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--text-muted)]">Due date</label>
-                  <Input type="date" value={localTask.due_date ?? ""} onChange={(event) => setLocalTask({ ...localTask, due_date: event.target.value || null })} />
+                  <Input type="date" value={localTask.due_date ?? ""} onChange={(event) => updateLocalTask({ ...localTask, due_date: event.target.value || null })} />
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--text-muted)]">Recurring rule</label>
-                  <Input value={localTask.recurring_rule ?? ""} onChange={(event) => setLocalTask({ ...localTask, recurring_rule: event.target.value || null })} placeholder="weekly" />
+                  <Input value={localTask.recurring_rule ?? ""} onChange={(event) => updateLocalTask({ ...localTask, recurring_rule: event.target.value || null })} placeholder="weekly" />
                 </div>
               </div>
 
@@ -209,7 +230,7 @@ export function TaskDetailDrawer({
                 <div className="max-h-48 space-y-2 overflow-y-auto rounded-2xl border border-border bg-[var(--surface-2)] p-2">
                   <button
                     type="button"
-                    onClick={() => setLocalTask({ ...localTask, assigned_to: null, assignee: null })}
+                    onClick={() => updateLocalTask({ ...localTask, assigned_to: null, assignee: null })}
                     className="flex w-full items-center rounded-xl px-3 py-2 text-left text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface)] hover:text-foreground"
                   >
                     Unassigned
@@ -219,7 +240,7 @@ export function TaskDetailDrawer({
                       key={member.id}
                       type="button"
                       onClick={() =>
-                        setLocalTask({
+                        updateLocalTask({
                           ...localTask,
                           assigned_to: member.user_id,
                           assignee: member.user

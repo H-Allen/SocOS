@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 
-import { getCurrentUser } from "@/lib/supabase/queries";
+import { getCurrentUser } from "@/lib/backend/queries";
 import { Navbar } from "@/components/layout/Navbar";
 import { EmptyState } from "@/components/ui/EmptyState";
 

@@ -1,0 +1,36 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isMember(orgId) {
+      return signedIn() &&
+        firestore.exists(/databases/(default)/documents/memberships/$(orgId + "_" + request.auth.uid));
+    }
+
+    function canManage(orgId) {
+      return isMember(orgId) &&
+        firestore.get(/databases/(default)/documents/memberships/$(orgId + "_" + request.auth.uid)).data.permission_level in ["admin", "committee"];
+    }
+
+    match /org-logos/{ownerId}/{fileName} {
+      allow read: if true;
+      allow write: if signedIn() && (
+        request.auth.uid == ownerId ||
+        canManage(ownerId)
+      );
+    }
+
+    match /resources/{orgId}/{fileName} {
+      allow read: if isMember(orgId);
+      allow write: if canManage(orgId);
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

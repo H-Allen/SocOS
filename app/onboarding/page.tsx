@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
-import { getAuthSession, getUserMemberships } from "@/lib/supabase/queries";
+import { getAuthSession, getUserMemberships } from "@/lib/backend/queries";
 
 export default async function OnboardingPage() {
   const session = await getAuthSession();
@@ -28,7 +28,7 @@ export default async function OnboardingPage() {
           </p>
         </div>
         <div className="mx-auto flex justify-center">
-          <OnboardingWizard userId={session.id} userName={session.user_metadata?.full_name || null} />
+          <OnboardingWizard userId={session.uid} userName={(session.name as string | undefined) || null} />
         </div>
       </div>
     </main>

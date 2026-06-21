@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { createBrowserBackendClient } from "@/lib/backend/client";
 import { formatRoleLabel, isAdmin } from "@/lib/workspace";
 import type { OrganizationRoleRecord, OrganizationRow, OrganizationType, PermissionLevel } from "@/types";
 import { cn } from "@/utils/cn";
@@ -38,8 +38,8 @@ const organizationTypeOptions: Array<{ label: string; value: OrganizationType }>
 
 export function SettingsWorkspace({ organization, initialRoles, permissionLevel }: SettingsWorkspaceProps) {
   const router = useRouter();
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
-  const client = supabase as any;
+  const backend = useMemo(() => createBrowserBackendClient(), []);
+  const client = backend as any;
   const canAdmin = isAdmin(permissionLevel);
 
   const [orgState, setOrgState] = useState(organization);
@@ -87,8 +87,8 @@ export function SettingsWorkspace({ organization, initialRoles, permissionLevel 
     const upload = await client.storage.from("org-logos").upload(path, logoFile, { upsert: true });
 
     if (!upload.error) {
-      const publicUrl = client.storage.from("org-logos").getPublicUrl(path);
-      const logoUrl = publicUrl.data.publicUrl;
+      const signedUrl = await client.storage.from("org-logos").createSignedUrl(path);
+      const logoUrl = signedUrl.data.signedUrl;
       const { data, error } = await client.from("organizations").update({ logo_url: logoUrl }).eq("id", orgState.id).select("*").single();
 
       if (!error && data) {
@@ -232,7 +232,7 @@ export function SettingsWorkspace({ organization, initialRoles, permissionLevel 
                 <ImagePlus className="h-6 w-6 text-[var(--text-secondary)]" />
                 <div>
                   <p className="text-sm font-medium text-foreground">{logoFile ? logoFile.name : "Upload a new organization logo"}</p>
-                  <p className="mt-1 text-sm text-[var(--text-secondary)]">This replaces the current logo and stores it in Supabase Storage.</p>
+                  <p className="mt-1 text-sm text-[var(--text-secondary)]">This replaces the current logo and stores it in Firebase Storage.</p>
                 </div>
                 <input type="file" accept="image/*" className="hidden" onChange={(event) => setLogoFile(event.target.files?.[0] ?? null)} />
               </label>

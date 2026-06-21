@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Calendar, Download, Plus, Save, Trash2 } from "lucide-react";
-import { Editor } from "react-simple-wysiwyg";
+import dynamic from "next/dynamic";
 
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+const Editor = dynamic(() => import("react-simple-wysiwyg").then((mod) => mod.default), { ssr: false });
+
+import { createBrowserBackendClient } from "@/lib/backend/client";
 import type { MeetingWithDetails, MembershipRow, TaskRecord, UserRow } from "@/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -35,11 +37,11 @@ function getInitials(name: string | null, email: string | null) {
 }
 
 export function MeetingDetailClient({ meeting, members, actionItems: initialActionItems, currentUserId, orgId }: MeetingDetailClientProps) {
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
-  const client = supabase as any;
+  const backend = useMemo(() => createBrowserBackendClient(), []);
+  const client = backend as any;
   const [editableMeeting, setEditableMeeting] = useState(meeting);
   const [notes, setNotes] = useState(meeting.notes[0]?.content ?? "");
-  const [lastSaved, setLastSaved] = useState<string | null>(meeting.notes[0]?.created_at ?? null);
+  const [lastSaved, setLastSaved] = useState<string | null>(meeting.notes[0]?.updated_at ?? meeting.notes[0]?.created_at ?? null);
   const [agendaItems, setAgendaItems] = useState(meeting.agendaItems);
   const [newAgendaItem, setNewAgendaItem] = useState("");
   const [attendees, setAttendees] = useState(meeting.attendees);
@@ -56,33 +58,35 @@ export function MeetingDetailClient({ meeting, members, actionItems: initialActi
       }
 
       if (existingNote) {
+        const savedAt = new Date().toISOString();
         const result = await client
           .from("meeting_notes")
-          .update({ content: notes })
+          .update({ content: notes, updated_by: currentUserId, updated_at: savedAt })
           .eq("id", existingNote.id)
           .select("*")
           .single();
 
         if (!result.error) {
           setEditableMeeting((current) => ({ ...current, notes: [result.data, ...current.notes.slice(1)] }));
-          setLastSaved(result.data.created_at);
+          setLastSaved(result.data.updated_at ?? savedAt);
         }
-      } else {
+      } else if (notes.trim()) {
+        const savedAt = new Date().toISOString();
         const result = await client
           .from("meeting_notes")
-          .insert({ meeting_id: editableMeeting.id, content: notes })
+          .insert({ meeting_id: editableMeeting.id, content: notes, updated_by: currentUserId, updated_at: savedAt })
           .select("*")
           .single();
 
         if (!result.error) {
           setEditableMeeting((current) => ({ ...current, notes: [result.data] }));
-          setLastSaved(result.data.created_at);
+          setLastSaved(result.data.updated_at ?? result.data.created_at ?? savedAt);
         }
       }
     }, 5000);
 
     return () => window.clearInterval(interval);
-  }, [client, editableMeeting.id, editableMeeting.notes, notes]);
+  }, [client, currentUserId, editableMeeting.id, editableMeeting.notes, notes]);
 
   const saveHeader = async () => {
     const result = await client

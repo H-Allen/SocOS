@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import { ResetPasswordPanel } from "@/components/auth/ResetPasswordPanel";
 
 export default function ResetPasswordPage() {
@@ -12,7 +14,9 @@ export default function ResetPasswordPage() {
           </p>
         </div>
         <div className="flex justify-center">
-          <ResetPasswordPanel />
+          <Suspense fallback={null}>
+            <ResetPasswordPanel />
+          </Suspense>
         </div>
       </div>
     </main>

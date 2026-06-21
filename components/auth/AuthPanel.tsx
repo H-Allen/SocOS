@@ -1,6 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import {
+  createUserWithEmailAndPassword,
+  sendEmailVerification,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  updateProfile
+} from "firebase/auth";
 import { ArrowRight, CheckCircle2, KeyRound, Mail, ShieldCheck, UserPlus } from "lucide-react";
 import type { Route } from "next";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -9,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { firebaseAuth } from "@/lib/firebase/client";
 
 type AuthPanelProps = {
   nextPath: string;
@@ -30,7 +37,7 @@ type SignUpForm = {
 export function AuthPanel({ nextPath }: AuthPanelProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const auth = useMemo(() => firebaseAuth, []);
   const [signInForm, setSignInForm] = useState<SignInForm>({ email: "", password: "" });
   const [signUpForm, setSignUpForm] = useState<SignUpForm>({ fullName: "", email: "", password: "", confirmPassword: "" });
   const [resetEmail, setResetEmail] = useState("");
@@ -44,18 +51,25 @@ export function AuthPanel({ nextPath }: AuthPanelProps) {
     setSuccessMessage(null);
     setIsSubmitting("signin");
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: signInForm.email.trim(),
-      password: signInForm.password
-    });
+    try {
+      const credential = await signInWithEmailAndPassword(auth, signInForm.email.trim(), signInForm.password);
+      const idToken = await credential.user.getIdToken();
+      const session = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken })
+      });
 
-    setIsSubmitting(null);
-
-    if (error) {
-      setErrorMessage(error.message);
+      if (!session.ok) {
+        throw new Error("Could not create a secure SocietyOS session.");
+      }
+    } catch (error) {
+      setIsSubmitting(null);
+      setErrorMessage(error instanceof Error ? error.message : "Could not sign in.");
       return;
     }
 
+    setIsSubmitting(null);
     router.push(nextPath as Route);
     router.refresh();
   };
@@ -76,33 +90,30 @@ export function AuthPanel({ nextPath }: AuthPanelProps) {
 
     setIsSubmitting("signup");
 
-    const redirectTo = `${window.location.origin}/auth/callback?next=/dashboard`;
-    const { data, error } = await supabase.auth.signUp({
-      email: signUpForm.email.trim(),
-      password: signUpForm.password,
-      options: {
-        emailRedirectTo: redirectTo,
-        data: {
-          full_name: signUpForm.fullName.trim()
-        }
+    try {
+      const credential = await createUserWithEmailAndPassword(auth, signUpForm.email.trim(), signUpForm.password);
+      await updateProfile(credential.user, { displayName: signUpForm.fullName.trim() });
+      await sendEmailVerification(credential.user);
+
+      const idToken = await credential.user.getIdToken(true);
+      const session = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken })
+      });
+
+      if (!session.ok) {
+        throw new Error("Could not create a secure SocietyOS session.");
       }
-    });
+    } catch (error) {
+      setIsSubmitting(null);
+      setErrorMessage(error instanceof Error ? error.message : "Could not create your account.");
+      return;
+    }
 
     setIsSubmitting(null);
-
-    if (error) {
-      setErrorMessage(error.message);
-      return;
-    }
-
-    if (data.session) {
-      router.push("/onboarding");
-      router.refresh();
-      return;
-    }
-
-    setSuccessMessage("Check your email to confirm your account, then sign in.");
-    setActiveTab("signin");
+    router.push("/onboarding");
+    router.refresh();
   };
 
   const sendReset = async () => {
@@ -110,18 +121,17 @@ export function AuthPanel({ nextPath }: AuthPanelProps) {
     setSuccessMessage(null);
     setIsSubmitting("reset");
 
-    const redirectTo = `${window.location.origin}/auth/callback?next=/reset-password`;
-    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail.trim(), {
-      redirectTo
-    });
-
-    setIsSubmitting(null);
-
-    if (error) {
-      setErrorMessage(error.message);
+    try {
+      await sendPasswordResetEmail(auth, resetEmail.trim(), {
+        url: `${window.location.origin}/reset-password`
+      });
+    } catch (error) {
+      setIsSubmitting(null);
+      setErrorMessage(error instanceof Error ? error.message : "Could not send reset email.");
       return;
     }
 
+    setIsSubmitting(null);
     setSuccessMessage("Password reset email sent. Check your inbox for the secure reset link.");
   };
 
@@ -130,7 +140,7 @@ export function AuthPanel({ nextPath }: AuthPanelProps) {
       <CardHeader>
         <CardTitle>Sign in to SocietyOS</CardTitle>
         <CardDescription>
-          Secure authentication is powered by Supabase Auth with session refresh handled in middleware.
+          Secure authentication is powered by Firebase Auth with server-verified sessions.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -254,7 +264,7 @@ export function AuthPanel({ nextPath }: AuthPanelProps) {
           <div className="rounded-xl border border-border bg-[var(--surface-2)] p-4">
             <Mail className="h-4 w-4 text-primary" />
             <p className="mt-3 text-sm font-medium text-foreground">Email confirmation ready</p>
-            <p className="mt-1 text-sm text-[var(--text-secondary)]">If email confirmation is enabled in Supabase, new accounts are verified before access.</p>
+            <p className="mt-1 text-sm text-[var(--text-secondary)]">Firebase sends verification emails for new accounts automatically.</p>
           </div>
           <div className="rounded-xl border border-border bg-[var(--surface-2)] p-4">
             <ShieldCheck className="h-4 w-4 text-primary" />

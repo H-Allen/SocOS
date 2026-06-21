@@ -1,0 +1,127 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isMember(orgId) {
+      return signedIn() && exists(/databases/$(database)/documents/memberships/$(orgId + "_" + request.auth.uid));
+    }
+
+    function membership(orgId) {
+      return get(/databases/$(database)/documents/memberships/$(orgId + "_" + request.auth.uid)).data;
+    }
+
+    function canManage(orgId) {
+      return isMember(orgId) && membership(orgId).permission_level in ["admin", "committee"];
+    }
+
+    function isAdmin(orgId) {
+      return isMember(orgId) && membership(orgId).permission_level == "admin";
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && request.auth.uid == userId;
+      allow delete: if false;
+    }
+
+    match /organizations/{orgId} {
+      allow read: if isMember(orgId);
+      allow create: if signedIn() && request.resource.data.created_by == request.auth.uid;
+      allow update: if isAdmin(orgId);
+      allow delete: if isAdmin(orgId);
+    }
+
+    match /memberships/{membershipId} {
+      allow read: if signedIn() && (
+        resource.data.user_id == request.auth.uid ||
+        isMember(resource.data.organization_id)
+      );
+      allow create: if signedIn() && (
+        request.resource.data.user_id == request.auth.uid ||
+        isAdmin(request.resource.data.organization_id)
+      );
+      allow update, delete: if isAdmin(resource.data.organization_id);
+    }
+
+    match /organization_roles/{roleId} {
+      allow read: if isMember(resource.data.organization_id);
+      allow create: if isAdmin(request.resource.data.organization_id);
+      allow update, delete: if isAdmin(resource.data.organization_id);
+    }
+
+    match /tasks/{taskId} {
+      allow read: if isMember(resource.data.organization_id);
+      allow create: if canManage(request.resource.data.organization_id);
+      allow update, delete: if canManage(resource.data.organization_id);
+    }
+
+    match /meetings/{meetingId} {
+      allow read: if isMember(resource.data.organization_id);
+      allow create: if canManage(request.resource.data.organization_id);
+      allow update, delete: if canManage(resource.data.organization_id);
+    }
+
+    match /meeting_notes/{noteId} {
+      allow read: if signedIn();
+      allow create, update, delete: if signedIn();
+    }
+
+    match /meeting_attendees/{attendeeId} {
+      allow read: if signedIn();
+      allow create, update, delete: if signedIn();
+    }
+
+    match /meeting_agenda_items/{itemId} {
+      allow read: if signedIn();
+      allow create, update, delete: if signedIn();
+    }
+
+    match /resources/{resourceId} {
+      allow read: if isMember(resource.data.organization_id);
+      allow create: if canManage(request.resource.data.organization_id);
+      allow update, delete: if canManage(resource.data.organization_id);
+    }
+
+    match /handovers/{handoverId} {
+      allow read: if isMember(resource.data.organization_id);
+      allow create: if canManage(request.resource.data.organization_id);
+      allow update, delete: if canManage(resource.data.organization_id);
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if isMember(resource.data.organization_id);
+      allow create: if canManage(request.resource.data.organization_id);
+      allow update: if canManage(resource.data.organization_id);
+      allow delete: if isAdmin(resource.data.organization_id);
+    }
+
+    match /events/{eventId} {
+      allow read: if isMember(resource.data.organization_id);
+      allow create: if canManage(request.resource.data.organization_id);
+      allow update, delete: if canManage(resource.data.organization_id);
+    }
+
+    match /activity_logs/{activityId} {
+      allow read: if isMember(resource.data.organization_id);
+      allow create: if isMember(request.resource.data.organization_id);
+      allow update, delete: if false;
+    }
+
+    match /invites/{inviteId} {
+      allow read: if signedIn() && (
+        request.auth.token.email == resource.data.email ||
+        isMember(resource.data.organization_id)
+      );
+      allow create: if canManage(request.resource.data.organization_id);
+      allow update: if signedIn() && (
+        request.auth.token.email == resource.data.email ||
+        canManage(resource.data.organization_id)
+      );
+      allow delete: if isAdmin(resource.data.organization_id);
+    }
+  }
+}

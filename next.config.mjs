@@ -8,11 +8,11 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: "https",
-        hostname: "**.supabase.co"
+        hostname: "firebasestorage.googleapis.com"
       },
       {
         protocol: "https",
-        hostname: "**.supabase.in"
+        hostname: "lh3.googleusercontent.com"
       }
     ]
   },
@@ -37,4 +37,3 @@ const nextConfig = {
 };
 
 export default nextConfig;
-

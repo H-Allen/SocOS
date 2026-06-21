@@ -26,7 +26,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { createBrowserBackendClient } from "@/lib/backend/client";
 import {
   HANDOVER_MONTHS,
   calculateHandoverCompletion,
@@ -122,8 +122,8 @@ function SectionCard({
 }
 
 export function HandoverDetailClient({ organizationId, roleSlug, initialHandover }: HandoverDetailClientProps) {
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
-  const client = supabase as any;
+  const backend = useMemo(() => createBrowserBackendClient(), []);
+  const client = backend as any;
   const derivedRoleName = useMemo(
     () => initialHandover?.role_name ?? deslugifyRole(roleSlug) ?? "Handover",
     [initialHandover?.role_name, roleSlug]
@@ -207,9 +207,9 @@ export function HandoverDetailClient({ organizationId, roleSlug, initialHandover
     };
   }, []);
 
-  const markDirty = (sectionId: SectionConfig["id"], nextContent: HandoverContent) => {
+  const markDirty = (sectionId: SectionConfig["id"], nextContent: HandoverContent | ((current: HandoverContent) => HandoverContent)) => {
     setFocusedSection(sectionId);
-    setContent(nextContent);
+    setContent((current) => (typeof nextContent === "function" ? nextContent(current) : nextContent));
     setDirtyVersion((value) => value + 1);
   };
 
@@ -397,7 +397,10 @@ export function HandoverDetailClient({ organizationId, roleSlug, initialHandover
             {isEditing ? (
               <Textarea
                 value={content.rolePurpose}
-                onChange={(event) => markDirty("role-purpose", { ...content, rolePurpose: event.target.value })}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  markDirty("role-purpose", (current) => ({ ...current, rolePurpose: value }));
+                }}
                 placeholder="Describe the primary responsibilities of this role in 2–3 sentences."
                 className="min-h-[160px]"
               />
@@ -422,16 +425,19 @@ export function HandoverDetailClient({ organizationId, roleSlug, initialHandover
             {isEditing ? (
               <div className="space-y-3">
                 {(content.recurringResponsibilities.length ? content.recurringResponsibilities : [""]).map((item, index) => (
-                  <div key={`${index}-${item}`} className="flex items-center gap-3 rounded-2xl border border-border bg-[var(--surface)] px-4 py-3">
+                  <div key={index} className="flex items-center gap-3 rounded-2xl border border-border bg-[var(--surface)] px-4 py-3">
                     <div className="flex h-6 w-6 items-center justify-center rounded-full border border-border bg-[var(--surface-2)]">
                       <Check className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
                     </div>
                     <Input
                       value={item}
                       onChange={(event) => {
-                        const nextItems = [...content.recurringResponsibilities];
-                        nextItems[index] = event.target.value;
-                        markDirty("recurring-responsibilities", { ...content, recurringResponsibilities: nextItems });
+                        const value = event.target.value;
+                        markDirty("recurring-responsibilities", (current) => {
+                          const nextItems = [...current.recurringResponsibilities];
+                          nextItems[index] = value;
+                          return { ...current, recurringResponsibilities: nextItems };
+                        });
                       }}
                       placeholder={index === 0 ? "Weekly committee emails" : "Monthly treasurer reports"}
                       className="border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
@@ -479,7 +485,7 @@ export function HandoverDetailClient({ organizationId, roleSlug, initialHandover
                   return (
                     <div
                       key={month}
-                      className="flex min-h-[260px] flex-col rounded-2xl border border-border bg-[linear-gradient(180deg,rgba(255,255,255,0.55),rgba(248,248,251,0.88))] p-3"
+                    className="flex min-h-[260px] flex-col rounded-2xl border border-border bg-[linear-gradient(180deg,color-mix(in_srgb,var(--surface)_96%,transparent),color-mix(in_srgb,var(--surface-2)_88%,transparent))] p-3"
                     >
                       <div className="flex items-center justify-between gap-2 border-b border-border pb-2">
                         <div>
@@ -771,7 +777,7 @@ export function HandoverDetailClient({ organizationId, roleSlug, initialHandover
           </SectionCard>
 
           <SectionCard id="advice" title="Advice from previous holder" indicator={sectionIndicator("advice")}>
-            <div className="rounded-2xl border-l-4 border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_6%,white_94%)] p-5">
+            <div className="rounded-2xl border border-border border-l-4 border-l-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,var(--surface)_88%)] p-5 text-foreground">
               <div className="mb-3 flex items-center gap-2 text-[var(--text-secondary)]">
                 <Quote className="h-4 w-4" />
                 <span className="text-xs font-semibold uppercase tracking-[0.16em]">Passed down</span>
@@ -779,9 +785,12 @@ export function HandoverDetailClient({ organizationId, roleSlug, initialHandover
               {isEditing ? (
                 <Textarea
                   value={content.adviceFromPreviousHolder}
-                  onChange={(event) => markDirty("advice", { ...content, adviceFromPreviousHolder: event.target.value })}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    markDirty("advice", (current) => ({ ...current, adviceFromPreviousHolder: value }));
+                  }}
                   placeholder="What do you wish you'd known on day one?"
-                  className="min-h-[180px] border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+                  className="min-h-[180px] border-0 bg-transparent px-0 text-foreground shadow-none placeholder:text-[var(--text-muted)] focus-visible:ring-0"
                 />
               ) : content.adviceFromPreviousHolder.trim() ? (
                 <p className="text-base leading-8 text-foreground">{content.adviceFromPreviousHolder}</p>
@@ -795,14 +804,17 @@ export function HandoverDetailClient({ organizationId, roleSlug, initialHandover
             {isEditing ? (
               <div className="space-y-3">
                 {(content.mistakesToAvoid.length ? content.mistakesToAvoid : [""]).map((item, index) => (
-                  <div key={`${index}-${item}`} className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3">
+                  <div key={index} className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3">
                     <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
                     <Input
                       value={item}
                       onChange={(event) => {
-                        const nextItems = [...content.mistakesToAvoid];
-                        nextItems[index] = event.target.value;
-                        markDirty("mistakes", { ...content, mistakesToAvoid: nextItems });
+                        const value = event.target.value;
+                        markDirty("mistakes", (current) => {
+                          const nextItems = [...current.mistakesToAvoid];
+                          nextItems[index] = value;
+                          return { ...current, mistakesToAvoid: nextItems };
+                        });
                       }}
                       placeholder={
                         index === 0

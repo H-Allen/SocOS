@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { AnnouncementsWorkspace } from "@/components/announcements/AnnouncementsWorkspace";
 import { Navbar } from "@/components/layout/Navbar";
 import { getServerActiveOrganization } from "@/lib/org-server";
-import { getCurrentUser, getOrganizationAnnouncements, getUserMemberships } from "@/lib/supabase/queries";
+import { getCurrentUser, getOrganizationAnnouncements, getUserMemberships } from "@/lib/backend/queries";
 
 export default async function AnnouncementsPage() {
   const [user, memberships] = await Promise.all([getCurrentUser(), getUserMemberships()]);

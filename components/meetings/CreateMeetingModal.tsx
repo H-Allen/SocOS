@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
 
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { createBrowserBackendClient } from "@/lib/backend/client";
 import type { MembershipRow, MeetingRow, UserRow } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -21,13 +21,9 @@ const createMeetingSchema = z
   .object({
     title: z.string().min(1, "Title is required."),
     description: z.string().optional(),
-    start_time: z.string().min(1, "Start time is required."),
-    end_time: z.string().min(1, "End time is required."),
+    start_time: z.string().optional(),
+    duration: z.string().optional(),
     invitedMembers: z.array(z.string()).default([])
-  })
-  .refine((value) => new Date(value.end_time) > new Date(value.start_time), {
-    message: "End time must be after start time.",
-    path: ["end_time"]
   });
 
 type CreateMeetingValues = z.infer<typeof createMeetingSchema>;
@@ -42,8 +38,8 @@ type CreateMeetingModalProps = {
 };
 
 export function CreateMeetingModal({ open, onOpenChange, orgId, currentUserId, members, onMeetingCreated }: CreateMeetingModalProps) {
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
-  const client = supabase as any;
+  const backend = useMemo(() => createBrowserBackendClient(), []);
+  const client = backend as any;
   const [isPending, startTransition] = useTransition();
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const router = useRouter();
@@ -54,21 +50,34 @@ export function CreateMeetingModal({ open, onOpenChange, orgId, currentUserId, m
       title: "",
       description: "",
       start_time: "",
-      end_time: "",
+      duration: "",
       invitedMembers: []
     }
   });
 
   const onSubmit = form.handleSubmit((values) => {
     startTransition(async () => {
+      let start: Date | null = null;
+      let end: Date | null = null;
+
+      if (values.start_time) {
+        start = new Date(values.start_time);
+        end = new Date(start.getTime());
+        if (values.duration) {
+          end.setMinutes(end.getMinutes() + parseInt(values.duration, 10));
+        } else {
+          end.setHours(end.getHours() + 1);
+        }
+      }
+
       const meetingInsert = await client
         .from("meetings")
         .insert({
           organization_id: orgId,
           title: values.title,
           description: values.description || null,
-          start_time: new Date(values.start_time).toISOString(),
-          end_time: new Date(values.end_time).toISOString(),
+          start_time: start ? start.toISOString() : null,
+          end_time: end ? end.toISOString() : null,
           created_by: currentUserId
         })
         .select("*")
@@ -94,6 +103,14 @@ export function CreateMeetingModal({ open, onOpenChange, orgId, currentUserId, m
 
       onMeetingCreated(meetingInsert.data as MeetingRow);
       onOpenChange(false);
+      setSelectedMembers([]);
+      form.reset({
+        title: "",
+        description: "",
+        start_time: "",
+        duration: "",
+        invitedMembers: []
+      });
       router.refresh();
     });
   });
@@ -101,9 +118,9 @@ export function CreateMeetingModal({ open, onOpenChange, orgId, currentUserId, m
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader>
+          <DialogHeader>
           <DialogTitle>Create meeting</DialogTitle>
-          <DialogDescription>Schedule a meeting for the current organization.</DialogDescription>
+          <DialogDescription>Add the purpose now. Start time and duration are optional if you are still planning.</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form className="space-y-4 p-6 pt-2" onSubmit={onSubmit}>
@@ -133,15 +150,20 @@ export function CreateMeetingModal({ open, onOpenChange, orgId, currentUserId, m
                 </FormItem>
               )}
             />
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="rounded-2xl border border-border bg-[var(--surface-2)] p-4">
+              <div className="mb-3">
+                <p className="text-sm font-semibold text-foreground">Scheduling</p>
+                <p className="text-sm text-[var(--text-secondary)]">Leave blank to create an unscheduled planning meeting.</p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
               <FormField
                 control={form.control}
                 name="start_time"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Start time</FormLabel>
+                    <FormLabel>Start time (Optional)</FormLabel>
                     <FormControl>
-                      <Input type="datetime-local" {...field} />
+                      <Input type="datetime-local" {...field} value={field.value ?? ""} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -149,17 +171,25 @@ export function CreateMeetingModal({ open, onOpenChange, orgId, currentUserId, m
               />
               <FormField
                 control={form.control}
-                name="end_time"
+                name="duration"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>End time</FormLabel>
+                    <FormLabel>Duration (Optional)</FormLabel>
                     <FormControl>
-                      <Input type="datetime-local" {...field} />
+                      <select {...field} value={field.value ?? ""} className="flex h-10 w-full rounded-lg border border-border bg-[var(--surface)] px-3 text-sm">
+                        <option value="">Default to 1 hour</option>
+                        <option value="30">30 minutes</option>
+                        <option value="45">45 minutes</option>
+                        <option value="60">1 hour</option>
+                        <option value="90">1.5 hours</option>
+                        <option value="120">2 hours</option>
+                      </select>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+              </div>
             </div>
             <div className="space-y-2">
               <Label>Invite members</Label>

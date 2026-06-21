@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
 import { sendInvites, type InviteResult } from "@/app/actions/invite";
 import { createOrganizationWithMembership, seedTemplate } from "@/app/actions/onboarding";
 import { ACTIVE_ORG_STORAGE_KEY } from "@/lib/org-state";
-import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { createBrowserBackendClient } from "@/lib/backend/client";
 import { Button } from "@/components/ui/button";
 import { CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -108,7 +108,7 @@ const templateSeeds: Record<
       { title: "Review equipment and kit stock", description: "Audit essential equipment, replacements, and storage needs.", priority: "medium", dueOffsetDays: 6 }
     ],
     meeting: { title: "Season launch committee meeting", description: "Set priorities for training, fixtures, welfare, and membership comms.", startOffsetDays: 3 },
-    handovers: ["President", "Captain", "Treasurer"],
+    handovers: ["President", "Secretary", "Treasurer"],
     announcement: { title: "Welcome to your club workspace", content: "This starter setup gives your committee a clean place to manage training, fixtures, and operational handovers." }
   },
   engineering_team: {
@@ -118,7 +118,7 @@ const templateSeeds: Record<
       { title: "Schedule first design review", description: "Book time for the team to align on technical milestones and blockers.", priority: "high", dueOffsetDays: 7 }
     ],
     meeting: { title: "Project kickoff sync", description: "Align on milestones, subsystem scope, and sponsor strategy for the term.", startOffsetDays: 2 },
-    handovers: ["Team Lead", "Technical Lead", "Sponsorship Lead"],
+    handovers: ["President", "Secretary", "Treasurer"],
     announcement: { title: "Engineering team starter loaded", content: "You now have a structured workspace for project planning, reviews, and sponsor operations." }
   },
   academic_society: {
@@ -128,7 +128,7 @@ const templateSeeds: Record<
       { title: "Draft term calendar", description: "Sketch out key events, collaborations, and committee checkpoints.", priority: "medium", dueOffsetDays: 8 }
     ],
     meeting: { title: "Academic programming planning", description: "Shape the term calendar, speaker pipeline, and member experience.", startOffsetDays: 4 },
-    handovers: ["President", "Academic Officer", "Events Officer"],
+    handovers: ["President", "Secretary", "Treasurer"],
     announcement: { title: "Academic society workspace ready", content: "Your starter plan includes sample programming tasks and handovers to help the committee get moving fast." }
   },
   finance_society: {
@@ -138,7 +138,7 @@ const templateSeeds: Record<
       { title: "Create analyst program content plan", description: "Plan workshops, prep sessions, and member content for the term.", priority: "medium", dueOffsetDays: 8 }
     ],
     meeting: { title: "Careers term planning session", description: "Set the event calendar, employer outreach plan, and member value proposition.", startOffsetDays: 2 },
-    handovers: ["President", "Corporate Relations Lead", "Treasurer"],
+    handovers: ["President", "Secretary", "Treasurer"],
     announcement: { title: "Finance society starter live", content: "The workspace now includes sample planning data for employer outreach, careers events, and role handovers." }
   },
   social_club: {
@@ -148,7 +148,7 @@ const templateSeeds: Record<
       { title: "Create term highlights list", description: "Capture the experiences and milestones you want members to remember.", priority: "low", dueOffsetDays: 9 }
     ],
     meeting: { title: "Community launch planning", description: "Align on socials, community standards, and member engagement for the first month.", startOffsetDays: 3 },
-    handovers: ["President", "Social Secretary", "Communications Lead"],
+    handovers: ["President", "Secretary", "Treasurer"],
     announcement: { title: "Your social club workspace is set", content: "You’re ready to plan events, keep the committee aligned, and build better continuity across years." }
   }
 };
@@ -169,7 +169,7 @@ function toIso(date: Date) {
 
 export function OnboardingWizard({ userId, userName }: OnboardingWizardProps) {
   const router = useRouter();
-  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const backend = useMemo(() => createBrowserBackendClient(), []);
   const [step, setStep] = useState(1);
   const [isPending, startTransition] = useTransition();
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -201,10 +201,10 @@ export function OnboardingWizard({ userId, userName }: OnboardingWizardProps) {
       if (logoFile) {
         const fileExt = logoFile.name.split(".").pop() ?? "png";
         const filePath = `${userId}/${Date.now()}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage.from("org-logos").upload(filePath, logoFile);
+        const { error: uploadError } = await backend.storage.from("org-logos").upload(filePath, logoFile);
         if (uploadError) throw uploadError;
-        const { data } = supabase.storage.from("org-logos").getPublicUrl(filePath);
-        logoUrl = data.publicUrl;
+        const { data } = await backend.storage.from("org-logos").createSignedUrl(filePath);
+        logoUrl = data.signedUrl;
       }
 
       // All Postgres writes happen in a Server Action (typed correctly server-side)
@@ -249,7 +249,7 @@ export function OnboardingWizard({ userId, userName }: OnboardingWizardProps) {
       }
 
       // Use the Server Action — validates permissions, caps at 20,
-      // stores invite records, and dispatches real Supabase Auth invite emails.
+      // stores invite records, and logs the batch for a Firebase Function email worker.
       const { results, error } = await sendInvites(organizationId, emails);
 
       if (error) {
@@ -393,7 +393,7 @@ export function OnboardingWizard({ userId, userName }: OnboardingWizardProps) {
                     </div>
                     <div>
                       <p className="text-sm font-medium text-[#111118]">{logoFile ? logoFile.name : "Upload organization logo"}</p>
-                      <p className="text-xs text-[#6b6b7a]">Optional. Stored in Supabase Storage.</p>
+                      <p className="text-xs text-[#6b6b7a]">Optional. Stored in Firebase Storage.</p>
                     </div>
                   </div>
                   <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[#4f46e5]">Choose file</span>
