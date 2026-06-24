@@ -4,9 +4,15 @@ import { z } from "zod";
 
 import { adminDb } from "@/lib/firebase/admin";
 import { getServerFirebaseUser } from "@/lib/firebase/session";
+import type { MembershipRole, PermissionLevel } from "@/types";
 
 const MAX_INVITES_PER_SUBMISSION = 20;
 const emailSchema = z.string().email();
+
+function permissionForRole(role: MembershipRole): PermissionLevel {
+  if (role === "president") return "admin";
+  return role === "member" ? "member" : "committee";
+}
 
 export type InviteResult = {
   email: string;
@@ -74,6 +80,7 @@ export async function sendInvites(
         invited_by: user.uid,
         status: "pending",
         role: "member",
+        permission_level: permissionForRole("member"),
         created_at: now
       });
 

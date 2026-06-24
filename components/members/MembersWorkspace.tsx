@@ -4,13 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { Mail, Shield, Trash2, UserPlus, Users2 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { inviteMember as inviteMemberAction, removeMember as removeMemberAction, updateMemberRole } from "@/app/actions/members";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { createBrowserBackendClient } from "@/lib/backend/client";
 import { canManageWorkspace, formatRoleLabel, getInitials, getRoleBadgeClasses, isAdmin } from "@/lib/workspace";
-import type { ActivityLogWithActor, InviteStatus, MemberRecord, MembershipRole, PermissionLevel, TaskRecord } from "@/types";
+import type { ActivityLogWithActor, MemberRecord, MembershipRole, PermissionLevel, TaskRecord } from "@/types";
 import { formatDate, formatRelativeTime } from "@/utils/format";
 import { cn } from "@/utils/cn";
 
@@ -18,7 +19,6 @@ type MembersWorkspaceProps = {
   initialMembers: MemberRecord[];
   tasks: TaskRecord[];
   orgId: string;
-  currentUserId: string;
   permissionLevel: PermissionLevel;
 };
 
@@ -32,7 +32,7 @@ const EMPTY_INVITE: InviteForm = {
   role: "member"
 };
 
-export function MembersWorkspace({ initialMembers, tasks, orgId, currentUserId, permissionLevel }: MembersWorkspaceProps) {
+export function MembersWorkspace({ initialMembers, tasks, orgId, permissionLevel }: MembersWorkspaceProps) {
   const backend = useMemo(() => createBrowserBackendClient(), []);
   const client = backend as any;
   const [members, setMembers] = useState(initialMembers);
@@ -41,6 +41,7 @@ export function MembersWorkspace({ initialMembers, tasks, orgId, currentUserId, 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteForm, setInviteForm] = useState(EMPTY_INVITE);
   const [isInviting, setIsInviting] = useState(false);
+  const [memberActionError, setMemberActionError] = useState<string | null>(null);
   const [selectedMember, setSelectedMember] = useState<MemberRecord | null>(null);
   const [roleHistory, setRoleHistory] = useState<ActivityLogWithActor[]>([]);
   const [memberToRemove, setMemberToRemove] = useState<MemberRecord | null>(null);
@@ -85,49 +86,38 @@ export function MembersWorkspace({ initialMembers, tasks, orgId, currentUserId, 
     }
 
     setIsInviting(true);
-    const { error } = await client.from("invites").insert({
-      organization_id: orgId,
+    setMemberActionError(null);
+    const result = await inviteMemberAction({
+      organizationId: orgId,
       email: inviteForm.email.trim(),
-      role: inviteForm.role,
-      invited_by: currentUserId,
-      status: "pending" satisfies InviteStatus
+      role: inviteForm.role
     });
 
-    if (!error) {
-      await client.from("activity_logs").insert({
-        organization_id: orgId,
-        actor_user_id: currentUserId,
-        action: "invited a member",
-        metadata: {
-          invite_email: inviteForm.email.trim(),
-          invite_role: inviteForm.role
-        }
-      });
+    if (!result.error) {
       setInviteOpen(false);
       setInviteForm(EMPTY_INVITE);
+    } else {
+      setMemberActionError(result.error);
     }
 
     setIsInviting(false);
   };
 
   const updateRole = async (member: MemberRecord, role: MembershipRole) => {
-    const { error } = await client.from("memberships").update({ role }).eq("id", member.id);
+    setMemberActionError(null);
+    const result = await updateMemberRole({
+      organizationId: orgId,
+      membershipId: member.id,
+      role
+    });
 
-    if (!error) {
+    if (!result.error) {
       setMembers((current) => current.map((entry) => (entry.id === member.id ? { ...entry, role } : entry)));
-      await client.from("activity_logs").insert({
-        organization_id: orgId,
-        actor_user_id: currentUserId,
-        action: "changed member role",
-        metadata: {
-          member_user_id: member.user_id,
-          from_role: member.role,
-          to_role: role
-        }
-      });
       if (selectedMember?.id === member.id) {
         setSelectedMember({ ...member, role });
       }
+    } else {
+      setMemberActionError(result.error);
     }
   };
 
@@ -136,23 +126,20 @@ export function MembersWorkspace({ initialMembers, tasks, orgId, currentUserId, 
       return;
     }
 
-    const { error } = await client.from("memberships").delete().eq("id", memberToRemove.id);
+    setMemberActionError(null);
+    const result = await removeMemberAction({
+      organizationId: orgId,
+      membershipId: memberToRemove.id
+    });
 
-    if (!error) {
+    if (!result.error) {
       setMembers((current) => current.filter((member) => member.id !== memberToRemove.id));
-      await client.from("activity_logs").insert({
-        organization_id: orgId,
-        actor_user_id: currentUserId,
-        action: "removed a member",
-        metadata: {
-          member_user_id: memberToRemove.user_id,
-          role: memberToRemove.role
-        }
-      });
       if (selectedMember?.id === memberToRemove.id) {
         setSelectedMember(null);
       }
       setMemberToRemove(null);
+    } else {
+      setMemberActionError(result.error);
     }
   };
 
@@ -188,6 +175,7 @@ export function MembersWorkspace({ initialMembers, tasks, orgId, currentUserId, 
 
       <section className="rounded-[24px] border border-border bg-[color-mix(in_srgb,var(--surface)_94%,transparent)] p-4">
         <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search members by name, email, or role" />
+        {memberActionError ? <p className="mt-3 text-sm font-medium text-red-400">{memberActionError}</p> : null}
       </section>
 
       {view === "table" ? (
@@ -285,6 +273,7 @@ export function MembersWorkspace({ initialMembers, tasks, orgId, currentUserId, 
             <div className="rounded-2xl border border-border bg-[var(--surface-2)] px-4 py-3 text-sm text-[var(--text-secondary)]">
               This creates a pending invite record. Email delivery depends on your outbound email setup.
             </div>
+            {memberActionError ? <p className="text-sm font-medium text-red-400">{memberActionError}</p> : null}
             <div className="flex justify-end gap-3">
               <Button variant="ghost" onClick={() => setInviteOpen(false)}>
                 Cancel
@@ -307,6 +296,7 @@ export function MembersWorkspace({ initialMembers, tasks, orgId, currentUserId, 
             <p className="text-sm text-[var(--text-secondary)]">
               Remove {memberToRemove?.user?.full_name ?? memberToRemove?.user?.email ?? "this member"} from the organization?
             </p>
+            {memberActionError ? <p className="text-sm font-medium text-red-400">{memberActionError}</p> : null}
             <div className="flex justify-end gap-3">
               <Button variant="ghost" onClick={() => setMemberToRemove(null)}>
                 Cancel

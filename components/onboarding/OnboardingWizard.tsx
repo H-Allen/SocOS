@@ -2,13 +2,13 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowLeft, ArrowRight, BadgeCheck, Building2, CheckCircle2, ImagePlus, Sparkles, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, BadgeCheck, Building2, CheckCircle2, ImagePlus, KeyRound, Sparkles, Users } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
 
 import { sendInvites, type InviteResult } from "@/app/actions/invite";
-import { createOrganizationWithMembership, seedTemplate } from "@/app/actions/onboarding";
+import { createOrganizationWithMembership, joinOrganizationWithCode, seedTemplate } from "@/app/actions/onboarding";
 import { ACTIVE_ORG_STORAGE_KEY } from "@/lib/org-state";
 import { createBrowserBackendClient } from "@/lib/backend/client";
 import { Button } from "@/components/ui/button";
@@ -170,10 +170,12 @@ function toIso(date: Date) {
 export function OnboardingWizard({ userId, userName }: OnboardingWizardProps) {
   const router = useRouter();
   const backend = useMemo(() => createBrowserBackendClient(), []);
+  const [mode, setMode] = useState<"join" | "create" | null>(null);
   const [step, setStep] = useState(1);
   const [isPending, startTransition] = useTransition();
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [organizationId, setOrganizationId] = useState<string | null>(null);
+  const [joinCode, setJoinCode] = useState("");
   const [inviteInput, setInviteInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState<"signup" | null>(null);
   const [inviteStatuses, setInviteStatuses] = useState<InviteStatus[]>([]);
@@ -189,7 +191,24 @@ export function OnboardingWizard({ userId, userName }: OnboardingWizardProps) {
     }
   });
 
-  const progress = (step / 3) * 100;
+  const progress = mode === "create" ? (step / 3) * 100 : mode === "join" ? 60 : 16;
+
+  const handleJoinWithCode = () => {
+    startTransition(async () => {
+      setErrorMessage(null);
+
+      const { organizationId: joinedOrgId, error } = await joinOrganizationWithCode({ code: joinCode });
+
+      if (error) {
+        setErrorMessage(error);
+        return;
+      }
+
+      window.localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, joinedOrgId);
+      router.push("/dashboard");
+      router.refresh();
+    });
+  };
 
   const handleCreateOrganization = stepOneForm.handleSubmit(async (values) => {
     setErrorMessage(null);
@@ -302,7 +321,7 @@ export function OnboardingWizard({ userId, userName }: OnboardingWizardProps) {
       <CardHeader className="space-y-5 border-b border-[#e4e4ec] p-8">
         <div className="flex items-center justify-between text-sm text-[#6b6b7a]">
           <span>
-            Step {step} of 3
+            {mode === "create" ? `Step ${step} of 3` : mode === "join" ? "Join a society" : "Choose your path"}
           </span>
           <span className="inline-flex items-center gap-2 rounded-full bg-[#f5f5fb] px-3 py-1 text-xs font-medium text-[#525269]">
             <Sparkles className="h-3.5 w-3.5" />
@@ -314,14 +333,18 @@ export function OnboardingWizard({ userId, userName }: OnboardingWizardProps) {
         </div>
         <div>
           <CardTitle className="text-3xl text-[#111118]">
-            {step === 1 && "Create your organization"}
-            {step === 2 && "Invite your team"}
-            {step === 3 && "Choose a starter template"}
+            {!mode && "How do you want to start?"}
+            {mode === "join" && "Join an existing society"}
+            {mode === "create" && step === 1 && "Create your organization"}
+            {mode === "create" && step === 2 && "Invite your team"}
+            {mode === "create" && step === 3 && "Choose a starter template"}
           </CardTitle>
           <p className="mt-2 text-sm leading-relaxed text-[#6b6b7a]">
-            {step === 1 && "Set up the basics for your society workspace and create the first admin account."}
-            {step === 2 && "Bring your committee in now, or skip and invite them once you’re inside the product."}
-            {step === 3 && "Start with a tailored operating template so your dashboard feels useful from day one."}
+            {!mode && "If your committee already has a SocietyOS workspace, use its society code. Otherwise, create a new workspace."}
+            {mode === "join" && "Enter the code shared by your committee to join as a member."}
+            {mode === "create" && step === 1 && "Set up the basics for your society workspace and create the first admin account."}
+            {mode === "create" && step === 2 && "Bring your committee in now, or skip and invite them once you’re inside the product."}
+            {mode === "create" && step === 3 && "Start with a tailored operating template so your dashboard feels useful from day one."}
           </p>
         </div>
       </CardHeader>
@@ -331,8 +354,84 @@ export function OnboardingWizard({ userId, userName }: OnboardingWizardProps) {
           <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{errorMessage}</div>
         ) : null}
 
+        {!mode ? (
+          <div className="animate-step-in space-y-4">
+            <button
+              type="button"
+              onClick={() => setMode("join")}
+              className="group w-full rounded-2xl border border-[#e4e4ec] bg-white p-5 text-left transition-all hover:-translate-y-0.5 hover:border-[#cfd3ff] hover:shadow-lg hover:shadow-[#dfe2ff]"
+            >
+              <div className="flex gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#eef0ff] text-[#6366f1]">
+                  <KeyRound className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <h2 className="font-semibold text-[#111118]">Join with a society code</h2>
+                    <ArrowRight className="h-4 w-4 text-[#9b9ba8] transition-transform group-hover:translate-x-1" />
+                  </div>
+                  <p className="mt-1 text-sm text-[#6b6b7a]">Already invited by your committee? Enter the shared code and land straight in the workspace.</p>
+                </div>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("create")}
+              className="group w-full rounded-2xl border border-[#e4e4ec] bg-white p-5 text-left transition-all hover:-translate-y-0.5 hover:border-[#cfd3ff] hover:shadow-lg hover:shadow-[#dfe2ff]"
+            >
+              <div className="flex gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#eef0ff] text-[#6366f1]">
+                  <Building2 className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <h2 className="font-semibold text-[#111118]">Set up a new society</h2>
+                    <ArrowRight className="h-4 w-4 text-[#9b9ba8] transition-transform group-hover:translate-x-1" />
+                  </div>
+                  <p className="mt-1 text-sm text-[#6b6b7a]">Create the workspace, become the first admin, and invite your committee afterwards.</p>
+                </div>
+              </div>
+            </button>
+          </div>
+        ) : null}
+
+        {mode === "join" ? (
+          <div className="animate-step-in space-y-5">
+            <div className="rounded-2xl border border-[#e4e4ec] bg-[#f8f8fb] p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eef0ff] text-[#6366f1]">
+                  <KeyRound className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-[#111118]">Ask your President or Secretary for the code</p>
+                  <p className="mt-1 text-sm text-[#6b6b7a]">Codes are 8 characters and are not case-sensitive.</p>
+                </div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Society code</Label>
+              <Input
+                value={joinCode}
+                onChange={(event) => setJoinCode(event.target.value.toUpperCase())}
+                placeholder="HYPED24"
+                className="border-[#d9d9e4] bg-white font-mono text-lg tracking-[0.24em] text-[#111118] placeholder:tracking-normal placeholder:text-[#9b9ba8] focus-visible:ring-[#6366f1] focus-visible:ring-offset-white"
+              />
+            </div>
+            <div className="flex items-center justify-between pt-4">
+              <Button type="button" variant="ghost" onClick={() => setMode(null)} disabled={isPending} className="text-[#6b6b7a] hover:bg-[#f5f5fb] hover:text-[#111118]">
+                <ArrowLeft className="h-4 w-4" />
+                Back
+              </Button>
+              <Button type="button" onClick={handleJoinWithCode} disabled={isPending || !joinCode.trim()} className="min-w-[150px] bg-[#6366f1] text-white hover:bg-[#4f46e5]">
+                {isPending ? "Joining..." : "Join society"}
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
         <Form {...stepOneForm}>
-          {step === 1 ? (
+          {mode === "create" && step === 1 ? (
             <form key="step-1" className="animate-step-in space-y-5" onSubmit={handleCreateOrganization}>
               <FormField
                 control={stepOneForm.control}
@@ -408,7 +507,7 @@ export function OnboardingWizard({ userId, userName }: OnboardingWizardProps) {
               </div>
 
               <div className="flex items-center justify-between pt-4">
-                <Button type="button" variant="ghost" disabled className="text-[#9b9ba8] hover:bg-transparent hover:text-[#9b9ba8]">
+                <Button type="button" variant="ghost" onClick={() => setMode(null)} disabled={isPending} className="text-[#6b6b7a] hover:bg-[#f5f5fb] hover:text-[#111118]">
                   <ArrowLeft className="h-4 w-4" />
                   Back
                 </Button>
@@ -421,7 +520,7 @@ export function OnboardingWizard({ userId, userName }: OnboardingWizardProps) {
           ) : null}
         </Form>
 
-        {step === 2 ? (
+        {mode === "create" && step === 2 ? (
           <div key="step-2" className="animate-step-in space-y-5">
             <div className="rounded-2xl border border-[#e4e4ec] bg-[#f8f8fb] p-4">
               <div className="flex items-start gap-3">
@@ -488,7 +587,7 @@ export function OnboardingWizard({ userId, userName }: OnboardingWizardProps) {
           </div>
         ) : null}
 
-        {step === 3 ? (
+        {mode === "create" && step === 3 ? (
           <div key="step-3" className="animate-step-in space-y-5">
             <div className="grid gap-3">
               {templateCards.map((template) => {

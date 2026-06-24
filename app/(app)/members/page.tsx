@@ -32,7 +32,6 @@ export default async function MembersPage() {
           initialMembers={members}
           tasks={tasks}
           orgId={currentOrg.id}
-          currentUserId={user.id}
           permissionLevel={currentOrg.membership.permission_level}
         />
       </div>

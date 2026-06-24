@@ -16,9 +16,21 @@ service firebase.storage {
         firestore.get(/databases/(default)/documents/memberships/$(orgId + "_" + request.auth.uid)).data.permission_level in ["admin", "committee"];
     }
 
+    function isImage() {
+      return request.resource != null &&
+        request.resource.size < 5 * 1024 * 1024 &&
+        request.resource.contentType.matches("image/.*");
+    }
+
+    function isAllowedResourceFile() {
+      return request.resource != null &&
+        request.resource.size < 25 * 1024 * 1024 &&
+        request.resource.contentType.matches("(application/pdf|image/.*|text/.*|application/vnd.openxmlformats-officedocument.*|application/msword|application/vnd.ms-excel|application/vnd.ms-powerpoint)");
+    }
+
     match /org-logos/{ownerId}/{fileName} {
       allow read: if true;
-      allow write: if signedIn() && (
+      allow write: if isImage() && signedIn() && (
         request.auth.uid == ownerId ||
         canManage(ownerId)
       );
@@ -26,7 +38,7 @@ service firebase.storage {
 
     match /resources/{orgId}/{fileName} {
       allow read: if isMember(orgId);
-      allow write: if canManage(orgId);
+      allow write: if canManage(orgId) && isAllowedResourceFile();
     }
 
     match /{allPaths=**} {

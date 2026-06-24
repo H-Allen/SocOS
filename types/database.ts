@@ -28,6 +28,7 @@ export interface OrganizationRow {
   university: string | null;
   type: OrganizationType | null;
   logo_url: string | null;
+  join_code: string | null;
   created_by: string | null;
   created_at: string | null;
 }
@@ -203,6 +204,7 @@ type InsertShape<T extends keyof Tables> =
           university?: string | null;
           type?: OrganizationType | null;
           logo_url?: string | null;
+          join_code?: string | null;
           created_by?: string | null;
           created_at?: string | null;
         }

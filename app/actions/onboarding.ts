@@ -8,6 +8,24 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function generateJoinCode() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  return Array.from({ length: 8 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
+}
+
+async function createUniqueJoinCode() {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const code = generateJoinCode();
+    const existing = await adminDb.collection("organizations").where("join_code", "==", code).limit(1).get();
+
+    if (existing.empty) {
+      return code;
+    }
+  }
+
+  throw new Error("Could not generate a unique society code. Please try again.");
+}
+
 function addDays(base: Date, days: number) {
   const next = new Date(base);
   next.setDate(next.getDate() + days);
@@ -36,6 +54,8 @@ export async function createOrganizationWithMembership(
   const membershipId = `${orgRef.id}_${user.uid}`;
 
   try {
+    const joinCode = await createUniqueJoinCode();
+
     await adminDb.runTransaction(async (transaction) => {
       transaction.set(orgRef, {
         id: orgRef.id,
@@ -43,6 +63,7 @@ export async function createOrganizationWithMembership(
         university: input.university,
         type: input.type,
         logo_url: input.logoUrl,
+        join_code: joinCode,
         created_by: user.uid,
         created_at: now
       });
@@ -64,6 +85,66 @@ export async function createOrganizationWithMembership(
       organizationId: "",
       error: error instanceof Error ? error.message : "Failed to create organization."
     };
+  }
+}
+
+export async function joinOrganizationWithCode(input: { code: string }): Promise<{ organizationId: string; error: string | null }> {
+  const user = await getServerFirebaseUser();
+
+  if (!user) {
+    return { organizationId: "", error: "Unauthenticated." };
+  }
+
+  const code = input.code.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+  if (code.length < 6) {
+    return { organizationId: "", error: "Enter a valid society code." };
+  }
+
+  try {
+    const orgQuery = await adminDb.collection("organizations").where("join_code", "==", code).limit(1).get();
+
+    if (orgQuery.empty) {
+      return { organizationId: "", error: "No society was found for that code." };
+    }
+
+    const orgDoc = orgQuery.docs[0];
+    const membershipId = `${orgDoc.id}_${user.uid}`;
+    const existingMembership = await adminDb.collection("memberships").doc(membershipId).get();
+
+    if (existingMembership.exists) {
+      return { organizationId: orgDoc.id, error: null };
+    }
+
+    const now = nowIso();
+    const membershipRef = adminDb.collection("memberships").doc(membershipId);
+    const activityRef = adminDb.collection("activity_logs").doc();
+    const batch = adminDb.batch();
+
+    batch.set(membershipRef, {
+      id: membershipId,
+      user_id: user.uid,
+      organization_id: orgDoc.id,
+      role: "member",
+      permission_level: "member",
+      joined_at: now
+    });
+
+    batch.set(activityRef, {
+      id: activityRef.id,
+      organization_id: orgDoc.id,
+      actor_user_id: user.uid,
+      action: "joined with society code",
+      metadata: { join_code: code },
+      created_at: now
+    });
+
+    await batch.commit();
+
+    return { organizationId: orgDoc.id, error: null };
+  } catch (error) {
+    console.error("[joinOrganizationWithCode]", error);
+    return { organizationId: "", error: error instanceof Error ? error.message : "Could not join society." };
   }
 }
 

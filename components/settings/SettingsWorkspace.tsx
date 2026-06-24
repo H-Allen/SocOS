@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, Building2, CalendarDays, CreditCard, FolderOpen, ImagePlus, Plus, Slack, Trash2 } from "lucide-react";
+import { AlertTriangle, Building2, CalendarDays, Copy, CreditCard, FolderOpen, ImagePlus, Plus, Slack, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
+import { ensureOrganizationJoinCode } from "@/app/actions/settings";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -53,8 +54,29 @@ export function SettingsWorkspace({ organization, initialRoles, permissionLevel 
   const [savingBranding, setSavingBranding] = useState(false);
   const [savingRole, setSavingRole] = useState(false);
   const [deletingOrg, setDeletingOrg] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [generatingCode, setGeneratingCode] = useState(false);
 
   const allRoles = [...builtInRoles, ...roles];
+
+  const copyJoinCode = async () => {
+    if (!orgState.join_code) return;
+
+    await navigator.clipboard.writeText(orgState.join_code);
+    setCopiedCode(true);
+    window.setTimeout(() => setCopiedCode(false), 1600);
+  };
+
+  const generateCode = async () => {
+    setGeneratingCode(true);
+    const result = await ensureOrganizationJoinCode(orgState.id);
+
+    if (result.code) {
+      setOrgState((current) => ({ ...current, join_code: result.code }));
+    }
+
+    setGeneratingCode(false);
+  };
 
   const saveGeneral = async () => {
     setSavingGeneral(true);
@@ -202,6 +224,23 @@ export function SettingsWorkspace({ organization, initialRoles, permissionLevel 
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-medium text-foreground">Society code</label>
+                <div className="flex gap-3">
+                  <Input value={orgState.join_code ?? "Not generated yet"} readOnly className="font-mono tracking-[0.18em]" />
+                  {orgState.join_code ? (
+                    <Button type="button" variant="outline" onClick={() => void copyJoinCode()}>
+                      <Copy className="h-4 w-4" />
+                      {copiedCode ? "Copied" : "Copy"}
+                    </Button>
+                  ) : (
+                    <Button type="button" variant="outline" onClick={() => void generateCode()} disabled={generatingCode}>
+                      {generatingCode ? "Generating..." : "Generate"}
+                    </Button>
+                  )}
+                </div>
+                <p className="text-sm text-[var(--text-secondary)]">Share this with members who should join this society directly.</p>
               </div>
             </div>
             <div className="mt-5 flex justify-end">

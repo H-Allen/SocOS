@@ -1,6 +1,5 @@
 import { signOut } from "firebase/auth";
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -270,8 +269,8 @@ class FirebaseQueryBuilder<T = unknown> implements PromiseLike<Result<T>> {
           return normalizeRow(this.table, id, { ...withDates, id });
         }
 
-        const ref = await addDoc(collectionRef(this.table), withDates);
-        await updateDoc(ref, { id: ref.id });
+        const ref = doc(collectionRef(this.table));
+        await setDoc(ref, { ...withDates, id: ref.id });
         return normalizeRow(this.table, ref.id, { ...withDates, id: ref.id });
       })
     );
@@ -334,15 +333,14 @@ class FirebaseQueryBuilder<T = unknown> implements PromiseLike<Result<T>> {
     const firestoreFilters = this.filters
       .filter((filter) => !filter.field.includes("."))
       .filter((filter) => ["==", "<", "<=", ">", ">=", "in"].includes(filter.op))
-      .slice(0, 1)
       .map((filter) => where(filter.field, filter.op as any, filter.value));
     const constraints: QueryConstraint[] = [...firestoreFilters];
 
-    if (this.orders.length === 1 && firestoreFilters.length === 0) {
+    if (this.orders.length === 1) {
       constraints.push(orderBy(this.orders[0].field, this.orders[0].ascending ? "asc" : "desc"));
     }
 
-    if (this.rowLimit && firestoreFilters.length === 0) {
+    if (this.rowLimit) {
       constraints.push(firestoreLimit(this.rowLimit));
     }
 

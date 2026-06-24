@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 
 import { FIREBASE_SESSION_COOKIE, FIREBASE_SESSION_MAX_AGE, ensureUserProfile } from "@/lib/firebase/session";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
+import type { MembershipRole, PermissionLevel } from "@/types";
+
+function permissionForRole(role: MembershipRole): PermissionLevel {
+  if (role === "president") return "admin";
+  return role === "member" ? "member" : "committee";
+}
 
 async function acceptPendingInvites(uid: string, email: string | undefined) {
   if (!email) return;
@@ -31,7 +37,7 @@ async function acceptPendingInvites(uid: string, email: string | undefined) {
         user_id: uid,
         organization_id: organizationId,
         role: invite.role ?? "member",
-        permission_level: invite.permission_level ?? "member",
+        permission_level: invite.permission_level ?? permissionForRole((invite.role ?? "member") as MembershipRole),
         joined_at: now
       },
       { merge: true }
@@ -66,6 +72,11 @@ export async function POST(request: Request) {
 
   try {
     const decoded = await adminAuth.verifyIdToken(idToken);
+
+    if (!decoded.email_verified) {
+      return NextResponse.json({ error: "Please verify your email before continuing." }, { status: 403 });
+    }
+
     const sessionCookie = await adminAuth.createSessionCookie(idToken, {
       expiresIn: FIREBASE_SESSION_MAX_AGE * 1000
     });

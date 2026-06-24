@@ -6,6 +6,7 @@ import {
   sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
+  signOut,
   updateProfile
 } from "firebase/auth";
 import { ArrowRight, CheckCircle2, KeyRound, Mail, ShieldCheck, UserPlus } from "lucide-react";
@@ -45,6 +46,41 @@ export function AuthPanel({ nextPath }: AuthPanelProps) {
   const [isSubmitting, setIsSubmitting] = useState<"signin" | "signup" | "reset" | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(searchParams.get("error") === "auth_callback_failed" ? "We couldn't complete authentication. Please try again." : null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
+
+  const createSessionAndRedirect = async () => {
+    const user = auth.currentUser;
+
+    if (!user) {
+      throw new Error("Please sign in again after verifying your email.");
+    }
+
+    await user.reload();
+
+    if (!user.emailVerified) {
+      throw new Error("Your email is not verified yet. Click the link in your inbox, then try again.");
+    }
+
+    const idToken = await user.getIdToken(true);
+    const session = await fetch("/api/auth/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idToken })
+    });
+
+    if (!session.ok) {
+      throw new Error("Could not create a secure SocietyOS session.");
+    }
+
+    router.push(nextPath as Route);
+    router.refresh();
+  };
+
+  const showVerificationScreen = async (email: string) => {
+    setVerificationEmail(email);
+    setErrorMessage(null);
+    setSuccessMessage("Verification email sent. Check your inbox, then come back here.");
+  };
 
   const signIn = async () => {
     setErrorMessage(null);
@@ -53,16 +89,15 @@ export function AuthPanel({ nextPath }: AuthPanelProps) {
 
     try {
       const credential = await signInWithEmailAndPassword(auth, signInForm.email.trim(), signInForm.password);
-      const idToken = await credential.user.getIdToken();
-      const session = await fetch("/api/auth/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken })
-      });
 
-      if (!session.ok) {
-        throw new Error("Could not create a secure SocietyOS session.");
+      if (!credential.user.emailVerified) {
+        await sendEmailVerification(credential.user);
+        await showVerificationScreen(credential.user.email ?? signInForm.email.trim());
+        setIsSubmitting(null);
+        return;
       }
+
+      await createSessionAndRedirect();
     } catch (error) {
       setIsSubmitting(null);
       setErrorMessage(error instanceof Error ? error.message : "Could not sign in.");
@@ -70,8 +105,6 @@ export function AuthPanel({ nextPath }: AuthPanelProps) {
     }
 
     setIsSubmitting(null);
-    router.push(nextPath as Route);
-    router.refresh();
   };
 
   const signUp = async () => {
@@ -94,17 +127,7 @@ export function AuthPanel({ nextPath }: AuthPanelProps) {
       const credential = await createUserWithEmailAndPassword(auth, signUpForm.email.trim(), signUpForm.password);
       await updateProfile(credential.user, { displayName: signUpForm.fullName.trim() });
       await sendEmailVerification(credential.user);
-
-      const idToken = await credential.user.getIdToken(true);
-      const session = await fetch("/api/auth/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken })
-      });
-
-      if (!session.ok) {
-        throw new Error("Could not create a secure SocietyOS session.");
-      }
+      await showVerificationScreen(credential.user.email ?? signUpForm.email.trim());
     } catch (error) {
       setIsSubmitting(null);
       setErrorMessage(error instanceof Error ? error.message : "Could not create your account.");
@@ -112,8 +135,49 @@ export function AuthPanel({ nextPath }: AuthPanelProps) {
     }
 
     setIsSubmitting(null);
-    router.push("/onboarding");
-    router.refresh();
+  };
+
+  const continueAfterVerification = async () => {
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    setIsSubmitting("signin");
+
+    try {
+      await createSessionAndRedirect();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Could not continue yet.");
+    } finally {
+      setIsSubmitting(null);
+    }
+  };
+
+  const resendVerification = async () => {
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    setIsSubmitting("reset");
+
+    try {
+      const user = auth.currentUser;
+
+      if (!user) {
+        throw new Error("Please sign in again so we can resend the verification email.");
+      }
+
+      await sendEmailVerification(user);
+      setSuccessMessage("Verification email sent again. Check your inbox.");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Could not resend verification email.");
+    } finally {
+      setIsSubmitting(null);
+    }
+  };
+
+  const useDifferentAccount = async () => {
+    await signOut(auth);
+    setVerificationEmail(null);
+    setSuccessMessage(null);
+    setErrorMessage(null);
+    setActiveTab("signin");
   };
 
   const sendReset = async () => {
@@ -144,6 +208,35 @@ export function AuthPanel({ nextPath }: AuthPanelProps) {
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {verificationEmail ? (
+          <div className="space-y-5">
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-950">
+              <div className="flex gap-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-amber-600">
+                  <Mail className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="font-semibold">Check your inbox</h2>
+                  <p className="mt-1 text-sm leading-relaxed text-amber-900">
+                    We sent a Firebase verification link to <span className="font-semibold">{verificationEmail}</span>. Click that link, then return here to continue into SocietyOS.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Button onClick={() => void continueAfterVerification()} disabled={isSubmitting === "signin"} className="justify-between">
+                {isSubmitting === "signin" ? "Checking..." : "I verified my email"}
+                <CheckCircle2 className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" onClick={() => void resendVerification()} disabled={isSubmitting === "reset"}>
+                {isSubmitting === "reset" ? "Sending..." : "Resend email"}
+              </Button>
+            </div>
+            <button type="button" onClick={() => void useDifferentAccount()} className="text-sm font-medium text-[var(--text-secondary)] underline-offset-4 hover:text-foreground hover:underline">
+              Use a different account
+            </button>
+          </div>
+        ) : (
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="w-full justify-start">
             <TabsTrigger value="signin">Sign in</TabsTrigger>
@@ -247,6 +340,7 @@ export function AuthPanel({ nextPath }: AuthPanelProps) {
             </div>
           </TabsContent>
         </Tabs>
+        )}
 
         {errorMessage ? (
           <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

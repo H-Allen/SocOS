@@ -59,6 +59,22 @@ async function getUserById(userId: string | null | undefined) {
   return getDocById<UserRow>("users", userId);
 }
 
+async function requireOrganizationMember(orgId: string): Promise<MembershipRow> {
+  const authUser = await getServerFirebaseUser();
+
+  if (!authUser) {
+    throw new Error("Unauthenticated.");
+  }
+
+  const membership = await getDocById<MembershipRow>("memberships", `${orgId}_${authUser.uid}`);
+
+  if (!membership) {
+    throw new Error("Unauthorized organization access.");
+  }
+
+  return membership;
+}
+
 async function hydrateTask(task: TaskRecord): Promise<TaskRecord> {
   return { ...task, assignee: await getUserById(task.assigned_to) };
 }
@@ -123,15 +139,18 @@ export async function getCurrentOrganization() {
 }
 
 export async function getOrganization(orgId: string): Promise<OrganizationRow | null> {
+  await requireOrganizationMember(orgId);
   return getDocById<OrganizationRow>("organizations", orgId);
 }
 
 export async function getOrganizationRoles(orgId: string): Promise<OrganizationRoleRecord[]> {
+  await requireOrganizationMember(orgId);
   const roles = await getRows<OrganizationRoleRecord>("organization_roles", [["organization_id", "==", orgId]]);
   return sortByDate(roles, "created_at", "asc");
 }
 
 export async function getOrgMembers(orgId: string): Promise<MemberRecord[]> {
+  await requireOrganizationMember(orgId);
   const memberships = await getRows<MembershipRow>("memberships", [["organization_id", "==", orgId]]);
   const hydrated = await Promise.all(
     sortByDate(memberships, "joined_at", "asc").map(async (membership) => ({
@@ -144,6 +163,7 @@ export async function getOrgMembers(orgId: string): Promise<MemberRecord[]> {
 }
 
 export async function getOrganizationResources(orgId: string): Promise<ResourceRecord[]> {
+  await requireOrganizationMember(orgId);
   const resources = await getRows<ResourceRecord>("resources", [["organization_id", "==", orgId]]);
   const hydrated = await Promise.all(
     sortByDate(resources, "created_at").map(async (resource) => ({
@@ -156,6 +176,7 @@ export async function getOrganizationResources(orgId: string): Promise<ResourceR
 }
 
 export async function getOrganizationAnnouncements(orgId: string): Promise<AnnouncementRecord[]> {
+  await requireOrganizationMember(orgId);
   const announcements = await getRows<AnnouncementRecord>("announcements", [["organization_id", "==", orgId]]);
   const sorted = [...announcements].sort((left, right) => {
     if (Boolean(left.pinned) !== Boolean(right.pinned)) return left.pinned ? -1 : 1;
@@ -166,11 +187,19 @@ export async function getOrganizationAnnouncements(orgId: string): Promise<Annou
 }
 
 export async function getOrganizationEvents(orgId: string): Promise<EventRow[]> {
+  await requireOrganizationMember(orgId);
   const events = await getRows<EventRow>("events", [["organization_id", "==", orgId]]);
   return sortByDate(events, "start_time", "asc");
 }
 
 export async function getDashboardTasks(orgId: string, userId: string): Promise<TaskWithAssignee[]> {
+  const membership = await requireOrganizationMember(orgId);
+  const authUser = await getServerFirebaseUser();
+
+  if (membership.permission_level === "member" && authUser?.uid !== userId) {
+    throw new Error("Unauthorized task access.");
+  }
+
   const tasks = await getRows<TaskRecord>("tasks", [["organization_id", "==", orgId]]);
   const filtered = tasks
     .filter((task) => task.assigned_to === userId && task.status !== "done")
@@ -181,6 +210,7 @@ export async function getDashboardTasks(orgId: string, userId: string): Promise<
 }
 
 export async function getUpcomingMeetings(orgId: string): Promise<MeetingRow[]> {
+  await requireOrganizationMember(orgId);
   const now = new Date();
   const nextWeek = new Date(now);
   nextWeek.setDate(now.getDate() + 7);
@@ -197,11 +227,13 @@ export async function getUpcomingMeetings(orgId: string): Promise<MeetingRow[]> 
 }
 
 export async function getRecentActivity(orgId: string): Promise<ActivityLogWithActor[]> {
+  await requireOrganizationMember(orgId);
   const activity = await getRows<ActivityLogWithActor>("activity_logs", [["organization_id", "==", orgId]]);
   return Promise.all(sortByDate(activity, "created_at").slice(0, 10).map(hydrateActivity));
 }
 
 export async function getDashboardAnnouncements(orgId: string): Promise<AnnouncementRow[]> {
+  await requireOrganizationMember(orgId);
   const announcements = await getRows<AnnouncementRow>("announcements", [["organization_id", "==", orgId]]);
   return announcements
     .sort((left, right) => {
@@ -212,6 +244,7 @@ export async function getDashboardAnnouncements(orgId: string): Promise<Announce
 }
 
 export async function getHealthCounts(orgId: string) {
+  await requireOrganizationMember(orgId);
   const nowDate = new Date().toISOString().slice(0, 10);
   const monthStart = new Date();
   monthStart.setDate(1);
@@ -233,22 +266,26 @@ export async function getHealthCounts(orgId: string) {
 }
 
 export async function getOrganizationHandovers(orgId: string): Promise<HandoverRow[]> {
+  await requireOrganizationMember(orgId);
   const handovers = await getRows<HandoverRow>("handovers", [["organization_id", "==", orgId]]);
   return sortByDate(handovers, "updated_at");
 }
 
 export async function getOrganizationTasks(orgId: string): Promise<TaskRecord[]> {
+  await requireOrganizationMember(orgId);
   const tasks = await getRows<TaskRecord>("tasks", [["organization_id", "==", orgId]]);
   return Promise.all(sortByDate(tasks, "created_at").map(hydrateTask));
 }
 
 export async function getTaskActivity(orgId: string, taskId: string): Promise<ActivityLogWithActor[]> {
+  await requireOrganizationMember(orgId);
   const activity = await getRows<ActivityLogWithActor>("activity_logs", [["organization_id", "==", orgId]]);
   const filtered = activity.filter((item) => (item.metadata as Record<string, unknown> | null)?.task_id === taskId);
   return Promise.all(sortByDate(filtered, "created_at").map(hydrateActivity));
 }
 
 export async function getMeetingsByTime(orgId: string) {
+  await requireOrganizationMember(orgId);
   const now = new Date().toISOString();
   const meetings = await getRows<MeetingRow>("meetings", [["organization_id", "==", orgId]]);
 
@@ -261,6 +298,7 @@ export async function getMeetingsByTime(orgId: string) {
 export async function getMeetingDetails(meetingId: string): Promise<MeetingWithDetails | null> {
   const meeting = await getDocById<MeetingRow>("meetings", meetingId);
   if (!meeting) return null;
+  await requireOrganizationMember(meeting.organization_id);
 
   const [notes, attendees, agendaItems] = await Promise.all([
     getRows<MeetingNoteRow>("meeting_notes", [["meeting_id", "==", meetingId]]),
@@ -284,6 +322,10 @@ export async function getMeetingDetails(meetingId: string): Promise<MeetingWithD
 }
 
 export async function getMeetingActionItems(meetingId: string): Promise<TaskRecord[]> {
+  const meeting = await getDocById<MeetingRow>("meetings", meetingId);
+  if (!meeting) return [];
+  await requireOrganizationMember(meeting.organization_id);
+
   const tasks = await getRows<TaskRecord>("tasks", [["source_meeting_id", "==", meetingId]]);
   return Promise.all(sortByDate(tasks, "created_at").map(hydrateTask));
 }
