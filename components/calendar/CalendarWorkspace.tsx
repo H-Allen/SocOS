@@ -282,6 +282,7 @@ export function CalendarWorkspace({ meetings, tasks, events, members, orgId, cur
         members={members}
         orgId={orgId}
         currentUserId={currentUserId}
+        currentPermissionLevel={permissionLevel}
         canDelete={canManage}
         onTaskUpdated={(task) => {
           setCalendarTasks((current) => current.map((entry) => (entry.id === task.id ? task : entry)));

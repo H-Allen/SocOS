@@ -22,8 +22,8 @@ type SettingsWorkspaceProps = {
 
 const builtInRoles = [
   { name: "President", permission_level: "admin" as const },
-  { name: "Secretary", permission_level: "committee" as const },
-  { name: "Treasurer", permission_level: "committee" as const },
+  { name: "Secretary", permission_level: "admin" as const },
+  { name: "Treasurer", permission_level: "admin" as const },
   { name: "Committee", permission_level: "committee" as const },
   { name: "Member", permission_level: "member" as const }
 ];

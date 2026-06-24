@@ -2,12 +2,8 @@ import { NextResponse } from "next/server";
 
 import { FIREBASE_SESSION_COOKIE, FIREBASE_SESSION_MAX_AGE, ensureUserProfile } from "@/lib/firebase/session";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
-import type { MembershipRole, PermissionLevel } from "@/types";
-
-function permissionForRole(role: MembershipRole): PermissionLevel {
-  if (role === "president") return "admin";
-  return role === "member" ? "member" : "committee";
-}
+import type { MembershipRole } from "@/types";
+import { permissionForRole } from "@/lib/workspace";
 
 async function acceptPendingInvites(uid: string, email: string | undefined) {
   if (!email) return;
@@ -26,6 +22,7 @@ async function acceptPendingInvites(uid: string, email: string | undefined) {
   pendingInvites.docs.forEach((inviteDoc) => {
     const invite = inviteDoc.data();
     const organizationId = invite.organization_id as string | undefined;
+    const role = (invite.role ?? "member") as MembershipRole;
 
     if (!organizationId) return;
 
@@ -36,8 +33,10 @@ async function acceptPendingInvites(uid: string, email: string | undefined) {
         id: membershipId,
         user_id: uid,
         organization_id: organizationId,
-        role: invite.role ?? "member",
-        permission_level: invite.permission_level ?? permissionForRole((invite.role ?? "member") as MembershipRole),
+        role,
+        permission_level: permissionForRole(role),
+        team_id: null,
+        team_lead_user_id: null,
         joined_at: now
       },
       { merge: true }

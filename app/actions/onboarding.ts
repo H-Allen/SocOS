@@ -2,7 +2,8 @@
 
 import { adminDb } from "@/lib/firebase/admin";
 import { getServerFirebaseUser } from "@/lib/firebase/session";
-import type { OrganizationType, TaskPriority } from "@/types";
+import { permissionForRole } from "@/lib/workspace";
+import type { MembershipRole, OrganizationType, TaskPriority } from "@/types";
 
 function nowIso() {
   return new Date().toISOString();
@@ -74,6 +75,8 @@ export async function createOrganizationWithMembership(
         organization_id: orgRef.id,
         role: "president",
         permission_level: "admin",
+        team_id: null,
+        team_lead_user_id: null,
         joined_at: now
       });
     });
@@ -127,6 +130,8 @@ export async function joinOrganizationWithCode(input: { code: string }): Promise
       organization_id: orgDoc.id,
       role: "member",
       permission_level: "member",
+      team_id: null,
+      team_lead_user_id: null,
       joined_at: now
     });
 
@@ -185,7 +190,12 @@ export async function seedTemplate(input: TemplateSeedInput): Promise<{ error: s
 
   const membership = await adminDb.collection("memberships").doc(`${input.organizationId}_${user.uid}`).get();
 
-  if (!membership.exists || membership.data()?.permission_level !== "admin") {
+  const membershipData = membership.data();
+
+  if (
+    !membership.exists ||
+    (membershipData?.permission_level !== "admin" && permissionForRole(membershipData?.role as MembershipRole) !== "admin")
+  ) {
     return { error: "You do not have permission to seed this organization." };
   }
 
@@ -205,6 +215,9 @@ export async function seedTemplate(input: TemplateSeedInput): Promise<{ error: s
       description: task.description,
       assigned_to: user.uid,
       created_by: user.uid,
+      visibility: "organization",
+      team_id: null,
+      team_lead_user_id: null,
       due_date: addDays(now, task.dueOffsetDays).toISOString().slice(0, 10),
       status: "todo",
       priority: task.priority,

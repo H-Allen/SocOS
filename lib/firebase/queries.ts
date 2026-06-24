@@ -1,6 +1,7 @@
 import { adminDb } from "@/lib/firebase/admin";
 import { getServerFirebaseUser, ensureUserProfile } from "@/lib/firebase/session";
 import { getServerActiveOrganization } from "@/lib/org-server";
+import { permissionForRole } from "@/lib/workspace";
 import type {
   ActivityLogWithActor,
   AnnouncementRecord,
@@ -20,6 +21,8 @@ import type {
   OrganizationWithMembership,
   PermissionLevel,
   ResourceRecord,
+  TeamRecord,
+  TeamRow,
   TaskRecord,
   TaskWithAssignee,
   UserRow
@@ -119,7 +122,9 @@ async function getUserMembershipsForUser(userId: string): Promise<OrganizationWi
         ...organization,
         membership: {
           role: membership.role as MembershipRole,
-          permission_level: membership.permission_level as PermissionLevel
+          permission_level: permissionForRole(membership.role as MembershipRole) === "admin"
+            ? "admin"
+            : (membership.permission_level as PermissionLevel)
         }
       };
     })
@@ -156,6 +161,19 @@ export async function getOrgMembers(orgId: string): Promise<MemberRecord[]> {
     sortByDate(memberships, "joined_at", "asc").map(async (membership) => ({
       ...membership,
       user: await getUserById(membership.user_id)
+    }))
+  );
+
+  return hydrated;
+}
+
+export async function getOrganizationTeams(orgId: string): Promise<TeamRecord[]> {
+  await requireOrganizationMember(orgId);
+  const teams = await getRows<TeamRow>("teams", [["organization_id", "==", orgId]]);
+  const hydrated = await Promise.all(
+    sortByDate(teams, "created_at", "asc").map(async (team) => ({
+      ...team,
+      lead: await getUserById(team.lead_user_id)
     }))
   );
 
@@ -272,9 +290,23 @@ export async function getOrganizationHandovers(orgId: string): Promise<HandoverR
 }
 
 export async function getOrganizationTasks(orgId: string): Promise<TaskRecord[]> {
-  await requireOrganizationMember(orgId);
+  const membership = await requireOrganizationMember(orgId);
+  const authUser = await getServerFirebaseUser();
+  const permission = permissionForRole(membership.role);
   const tasks = await getRows<TaskRecord>("tasks", [["organization_id", "==", orgId]]);
-  return Promise.all(sortByDate(tasks, "created_at").map(hydrateTask));
+  const visibleTasks = tasks.filter((task) => {
+    if (task.visibility === "private") {
+      return task.created_by === authUser?.uid;
+    }
+
+    if (permission === "member" && membership.permission_level === "member") {
+      return task.assigned_to === authUser?.uid || task.created_by === authUser?.uid;
+    }
+
+    return true;
+  });
+
+  return Promise.all(sortByDate(visibleTasks, "created_at").map(hydrateTask));
 }
 
 export async function getTaskActivity(orgId: string, taskId: string): Promise<ActivityLogWithActor[]> {

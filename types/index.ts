@@ -13,6 +13,7 @@ import type {
   OrganizationRow,
   PermissionLevel,
   ResourceRow,
+  TeamRow,
   TaskRow,
   UserRow
 } from "@/types/database";
@@ -40,6 +41,10 @@ export interface ResourceRecord extends ResourceRow {
 
 export interface MemberRecord extends MembershipRow {
   user: UserRow | null;
+}
+
+export interface TeamRecord extends TeamRow {
+  lead: Pick<UserRow, "id" | "full_name" | "email" | "avatar_url"> | null;
 }
 
 export interface AnnouncementRecord extends AnnouncementRow {

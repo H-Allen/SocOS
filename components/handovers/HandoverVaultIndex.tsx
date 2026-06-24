@@ -23,6 +23,7 @@ const INFO_BANNER_KEY = "societyos.handoverVault.bannerDismissed";
 type HandoverVaultIndexProps = {
   organizationId: string;
   handovers: HandoverRow[];
+  canEdit: boolean;
 };
 
 type CardRecord = {
@@ -46,7 +47,7 @@ function cardStyles(status: string) {
   return "border-border bg-[var(--surface)]";
 }
 
-export function HandoverVaultIndex({ organizationId, handovers }: HandoverVaultIndexProps) {
+export function HandoverVaultIndex({ organizationId, handovers, canEdit }: HandoverVaultIndexProps) {
   const router = useRouter();
   const backend = useMemo(() => createBrowserBackendClient(), []);
   const client = backend as any;
@@ -260,23 +261,25 @@ export function HandoverVaultIndex({ organizationId, handovers }: HandoverVaultI
           );
         })}
 
-        <button
-          type="button"
-          onClick={() => setDialogOpen(true)}
-          className="group rounded-xl border border-dashed border-border bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] p-6 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--accent)] hover:shadow-[0_18px_50px_rgba(17,17,24,0.08)]"
-        >
-          <div className="flex h-full flex-col justify-between gap-8">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--surface-2)] text-primary transition-colors group-hover:bg-primary group-hover:text-white">
-              <Plus className="h-5 w-5" />
+        {canEdit ? (
+          <button
+            type="button"
+            onClick={() => setDialogOpen(true)}
+            className="group rounded-xl border border-dashed border-border bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] p-6 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--accent)] hover:shadow-[0_18px_50px_rgba(17,17,24,0.08)]"
+          >
+            <div className="flex h-full flex-col justify-between gap-8">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--surface-2)] text-primary transition-colors group-hover:bg-primary group-hover:text-white">
+                <Plus className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-foreground">Add custom role</h2>
+                <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                  Create a handover vault for committee roles that are unique to your society.
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-xl font-semibold text-foreground">Add custom role</h2>
-              <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                Create a handover vault for committee roles that are unique to your society.
-              </p>
-            </div>
-          </div>
-        </button>
+          </button>
+        ) : null}
       </section>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

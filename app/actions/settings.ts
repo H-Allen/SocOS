@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 
 import { adminDb } from "@/lib/firebase/admin";
 import { getServerFirebaseUser } from "@/lib/firebase/session";
+import { permissionForRole } from "@/lib/workspace";
+import type { MembershipRole } from "@/types";
 
 function generateJoinCode() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -32,7 +34,12 @@ export async function ensureOrganizationJoinCode(organizationId: string): Promis
 
   const membership = await adminDb.collection("memberships").doc(`${organizationId}_${user.uid}`).get();
 
-  if (!membership.exists || membership.data()?.permission_level !== "admin") {
+  const membershipData = membership.data();
+
+  if (
+    !membership.exists ||
+    (membershipData?.permission_level !== "admin" && permissionForRole(membershipData?.role as MembershipRole) !== "admin")
+  ) {
     return { code: null, error: "You do not have permission to manage society codes." };
   }
 

@@ -13,7 +13,10 @@ service firebase.storage {
 
     function canManage(orgId) {
       return isMember(orgId) &&
-        firestore.get(/databases/(default)/documents/memberships/$(orgId + "_" + request.auth.uid)).data.permission_level in ["admin", "committee"];
+        (
+          firestore.get(/databases/(default)/documents/memberships/$(orgId + "_" + request.auth.uid)).data.permission_level in ["admin", "committee"] ||
+          firestore.get(/databases/(default)/documents/memberships/$(orgId + "_" + request.auth.uid)).data.role in ["president", "secretary", "treasurer", "committee"]
+        );
     }
 
     function isImage() {

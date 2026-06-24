@@ -47,6 +47,7 @@ type HandoverDetailClientProps = {
   organizationId: string;
   roleSlug: string;
   initialHandover: HandoverRow | null;
+  canEdit: boolean;
 };
 
 type SaveState = "idle" | "queued" | "saving" | "saved" | "error";
@@ -121,7 +122,7 @@ function SectionCard({
   );
 }
 
-export function HandoverDetailClient({ organizationId, roleSlug, initialHandover }: HandoverDetailClientProps) {
+export function HandoverDetailClient({ organizationId, roleSlug, initialHandover, canEdit }: HandoverDetailClientProps) {
   const backend = useMemo(() => createBrowserBackendClient(), []);
   const client = backend as any;
   const derivedRoleName = useMemo(
@@ -384,10 +385,16 @@ export function HandoverDetailClient({ organizationId, roleSlug, initialHandover
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
-              <Button variant={isEditing ? "secondary" : "default"} onClick={() => setIsEditing((value) => !value)}>
-                <Pencil className="h-4 w-4" />
-                {isEditing ? "View mode" : "Edit"}
-              </Button>
+              {canEdit ? (
+                <Button variant={isEditing ? "secondary" : "default"} onClick={() => setIsEditing((value) => !value)}>
+                  <Pencil className="h-4 w-4" />
+                  {isEditing ? "View mode" : "Edit"}
+                </Button>
+              ) : (
+                <div className="rounded-full border border-border bg-[var(--surface-2)] px-4 py-2 text-sm text-[var(--text-secondary)]">
+                  View only
+                </div>
+              )}
             </div>
           </div>
         </section>

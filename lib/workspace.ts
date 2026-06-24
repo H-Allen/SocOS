@@ -1,5 +1,46 @@
 import type { MembershipRole, PermissionLevel } from "@/types";
 
+export const ADMIN_ROLES = ["president", "secretary", "treasurer"] as const;
+export const COMMITTEE_ROLES = ["committee"] as const;
+
+export const SOCIETY_ROLE_OPTIONS: Array<{
+  value: MembershipRole;
+  label: string;
+  permissionLevel: PermissionLevel;
+  description: string;
+}> = [
+  {
+    value: "president",
+    label: "President",
+    permissionLevel: "admin",
+    description: "Full admin power and complete visibility across the society."
+  },
+  {
+    value: "secretary",
+    label: "Secretary",
+    permissionLevel: "admin",
+    description: "Full admin power, including members, meetings, handovers, and records."
+  },
+  {
+    value: "treasurer",
+    label: "Treasurer",
+    permissionLevel: "admin",
+    description: "Full admin power, including finances, resources, and role management."
+  },
+  {
+    value: "committee",
+    label: "Committee",
+    permissionLevel: "committee",
+    description: "Can manage operational content such as handovers, resources, tasks, and meetings."
+  },
+  {
+    value: "member",
+    label: "Member",
+    permissionLevel: "member",
+    description: "Can log in, explore society information, and view member-facing content."
+  }
+];
+
 export const RESOURCE_CATEGORIES = [
   "Governance",
   "Finance",
@@ -26,6 +67,20 @@ export function canManageWorkspace(permissionLevel: PermissionLevel | null | und
 
 export function isAdmin(permissionLevel: PermissionLevel | null | undefined) {
   return permissionLevel === "admin";
+}
+
+export function permissionForRole(role: MembershipRole): PermissionLevel {
+  if ((ADMIN_ROLES as readonly string[]).includes(role)) return "admin";
+  if ((COMMITTEE_ROLES as readonly string[]).includes(role)) return "committee";
+  return "member";
+}
+
+export function canChangeRoles(permissionLevel: PermissionLevel | null | undefined) {
+  return isAdmin(permissionLevel);
+}
+
+export function roleHasCommitteeAccess(permissionLevel: PermissionLevel | null | undefined) {
+  return canManageWorkspace(permissionLevel);
 }
 
 export function getRoleBadgeClasses(role: MembershipRole) {

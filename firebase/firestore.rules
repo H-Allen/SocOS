@@ -19,11 +19,17 @@ service cloud.firestore {
     }
 
     function canManage(orgId) {
-      return isMember(orgId) && membership(orgId).permission_level in ["admin", "committee"];
+      return isMember(orgId) && (
+        membership(orgId).permission_level in ["admin", "committee"] ||
+        membership(orgId).role in ["president", "secretary", "treasurer", "committee"]
+      );
     }
 
     function isAdmin(orgId) {
-      return isMember(orgId) && membership(orgId).permission_level == "admin";
+      return isMember(orgId) && (
+        membership(orgId).permission_level == "admin" ||
+        membership(orgId).role in ["president", "secretary", "treasurer"]
+      );
     }
 
     function meetingOrgId(meetingId) {
@@ -69,11 +75,43 @@ service cloud.firestore {
       allow update, delete: if isAdmin(resource.data.organization_id);
     }
 
-    match /tasks/{taskId} {
+    match /teams/{teamId} {
       allow read: if isMember(resource.data.organization_id);
-      allow create: if canManage(request.resource.data.organization_id);
-      allow update: if canManage(resource.data.organization_id) && immutableOrg();
-      allow delete: if canManage(resource.data.organization_id);
+      allow create: if canManage(request.resource.data.organization_id) &&
+        request.resource.data.lead_user_id == request.auth.uid;
+      allow update: if isAdmin(resource.data.organization_id) ||
+        (canManage(resource.data.organization_id) && resource.data.lead_user_id == request.auth.uid && immutableOrg());
+      allow delete: if isAdmin(resource.data.organization_id) ||
+        (canManage(resource.data.organization_id) && resource.data.lead_user_id == request.auth.uid);
+    }
+
+    match /tasks/{taskId} {
+      allow read: if isMember(resource.data.organization_id) &&
+        (resource.data.visibility != "private" || resource.data.created_by == request.auth.uid);
+      allow create: if (
+        canManage(request.resource.data.organization_id) ||
+        (
+          isMember(request.resource.data.organization_id) &&
+          request.resource.data.visibility == "private" &&
+          request.resource.data.created_by == request.auth.uid &&
+          request.resource.data.assigned_to == request.auth.uid
+        )
+      );
+      allow update: if immutableOrg() && (
+        canManage(resource.data.organization_id) ||
+        (
+          isMember(resource.data.organization_id) &&
+          resource.data.assigned_to == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status"])
+        ) ||
+        (
+          isMember(resource.data.organization_id) &&
+          resource.data.visibility == "private" &&
+          resource.data.created_by == request.auth.uid
+        )
+      );
+      allow delete: if canManage(resource.data.organization_id) ||
+        (isMember(resource.data.organization_id) && resource.data.visibility == "private" && resource.data.created_by == request.auth.uid);
     }
 
     match /meetings/{meetingId} {

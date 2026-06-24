@@ -6,6 +6,7 @@ export {
   getCurrentOrganization,
   getOrganization,
   getOrganizationRoles,
+  getOrganizationTeams,
   getOrgMembers,
   getOrganizationResources,
   getOrganizationAnnouncements,

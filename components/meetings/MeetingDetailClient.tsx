@@ -193,6 +193,9 @@ export function MeetingDetailClient({ meeting, members, actionItems: initialActi
         title: taskTitle,
         description: truncateText(notes.replace(/<[^>]+>/g, " "), 240),
         created_by: currentUserId,
+        visibility: "organization",
+        team_id: null,
+        team_lead_user_id: null,
         source_meeting_id: editableMeeting.id,
         status: "todo",
         priority: "medium"

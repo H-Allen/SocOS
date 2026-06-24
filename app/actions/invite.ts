@@ -4,15 +4,10 @@ import { z } from "zod";
 
 import { adminDb } from "@/lib/firebase/admin";
 import { getServerFirebaseUser } from "@/lib/firebase/session";
-import type { MembershipRole, PermissionLevel } from "@/types";
+import { permissionForRole } from "@/lib/workspace";
 
 const MAX_INVITES_PER_SUBMISSION = 20;
 const emailSchema = z.string().email();
-
-function permissionForRole(role: MembershipRole): PermissionLevel {
-  if (role === "president") return "admin";
-  return role === "member" ? "member" : "committee";
-}
 
 export type InviteResult = {
   email: string;

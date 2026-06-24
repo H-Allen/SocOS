@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
 
+import { deleteTask, updateTask } from "@/app/actions/tasks";
 import { createBrowserBackendClient } from "@/lib/backend/client";
-import type { ActivityLogWithActor, MembershipRow, TaskRecord, UserRow } from "@/types";
+import type { ActivityLogWithActor, MembershipRow, PermissionLevel, TaskRecord, UserRow } from "@/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -21,12 +22,11 @@ type TaskDetailDrawerProps = {
   members: MemberOption[];
   orgId: string;
   currentUserId: string;
+  currentPermissionLevel: PermissionLevel;
   canDelete: boolean;
   onTaskUpdated: (task: TaskRecord) => void;
   onTaskDeleted: (taskId: string) => void;
 };
-
-type TaskUpdateField = Partial<Pick<TaskRecord, "title" | "description" | "status" | "priority" | "assigned_to" | "due_date" | "recurring_rule">>;
 
 function getInitials(name: string | null, email: string | null) {
   const value = name ?? email ?? "User";
@@ -45,6 +45,7 @@ export function TaskDetailDrawer({
   members,
   orgId,
   currentUserId,
+  currentPermissionLevel,
   canDelete,
   onTaskUpdated,
   onTaskDeleted
@@ -55,6 +56,12 @@ export function TaskDetailDrawer({
   const [activity, setActivity] = useState<ActivityLogWithActor[]>([]);
   const [assigneeFilter, setAssigneeFilter] = useState("");
   const hasUserEditedRef = useRef(false);
+  const canFullyEdit =
+    Boolean(localTask) &&
+    (currentPermissionLevel === "admin" ||
+      (currentPermissionLevel === "committee" && localTask?.team_lead_user_id === currentUserId) ||
+      (localTask?.visibility === "private" && localTask.created_by === currentUserId));
+  const canUpdateStatus = canFullyEdit || localTask?.assigned_to === currentUserId;
 
   useEffect(() => {
     hasUserEditedRef.current = false;
@@ -109,41 +116,35 @@ export function TaskDetailDrawer({
     }
 
     const timeout = window.setTimeout(async () => {
-      const update: TaskUpdateField = {
-        title: localTask.title,
-        description: localTask.description,
+      const result = await updateTask({
+        taskId: localTask.id,
+        title: canFullyEdit ? localTask.title : undefined,
+        description: canFullyEdit ? localTask.description : undefined,
         status: localTask.status,
-        priority: localTask.priority,
-        assigned_to: localTask.assigned_to,
-        due_date: localTask.due_date,
-        recurring_rule: localTask.recurring_rule
-      };
+        priority: canFullyEdit ? localTask.priority : undefined,
+        assignedTo: canFullyEdit ? localTask.assigned_to : undefined,
+        dueDate: canFullyEdit ? localTask.due_date : undefined,
+        recurringRule: canFullyEdit ? localTask.recurring_rule : undefined
+      });
 
-      const { data, error } = await client
-        .from("tasks")
-        .update(update)
-        .eq("id", localTask.id)
-        .select("id, organization_id, title, description, assigned_to, created_by, source_meeting_id, due_date, status, priority, recurring_rule, created_at, assignee:users!tasks_assigned_to_fkey(id, full_name, email, avatar_url)")
-        .single();
-
-      if (!error && data) {
+      if (!result.error && result.task) {
         hasUserEditedRef.current = false;
-        onTaskUpdated(data as TaskRecord);
-        await client.from("activity_logs").insert({
-          organization_id: orgId,
-          actor_user_id: currentUserId,
-          action: "updated a task",
-          metadata: {
-            task_id: localTask.id
-          }
-        });
+        onTaskUpdated(result.task);
       }
     }, 500);
 
     return () => window.clearTimeout(timeout);
-  }, [client, currentUserId, localTask, onTaskUpdated, orgId, task]);
+  }, [canFullyEdit, localTask, onTaskUpdated, task]);
 
   const filteredMembers = members.filter((member) => {
+    if (localTask?.visibility === "team" && member.user_id !== localTask.team_lead_user_id && member.team_id !== localTask.team_id) {
+      return false;
+    }
+
+    if (currentPermissionLevel === "committee" && localTask?.visibility !== "team" && member.user_id !== currentUserId && member.team_lead_user_id !== currentUserId) {
+      return false;
+    }
+
     const value = `${member.user?.full_name ?? ""} ${member.user?.email ?? ""}`.toLowerCase();
     return value.includes(assigneeFilter.toLowerCase());
   });
@@ -153,15 +154,8 @@ export function TaskDetailDrawer({
       return;
     }
 
-    await client.from("tasks").delete().eq("id", localTask.id);
-    await client.from("activity_logs").insert({
-      organization_id: orgId,
-      actor_user_id: currentUserId,
-      action: "deleted a task",
-      metadata: {
-        task_id: localTask.id
-      }
-    });
+    const result = await deleteTask({ taskId: localTask.id });
+    if (result.error) return;
     onTaskDeleted(localTask.id);
     onOpenChange(false);
   };
@@ -178,12 +172,12 @@ export function TaskDetailDrawer({
             <div className="space-y-6 p-6">
               <div className="space-y-2">
                 <label className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--text-muted)]">Title</label>
-                <Input value={localTask.title} onChange={(event) => updateLocalTask({ ...localTask, title: event.target.value })} />
+                <Input disabled={!canFullyEdit} value={localTask.title} onChange={(event) => updateLocalTask({ ...localTask, title: event.target.value })} />
               </div>
 
               <div className="space-y-2">
                 <label className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--text-muted)]">Description</label>
-                <Textarea value={localTask.description ?? ""} onChange={(event) => updateLocalTask({ ...localTask, description: event.target.value })} className="min-h-[140px]" />
+                <Textarea disabled={!canFullyEdit} value={localTask.description ?? ""} onChange={(event) => updateLocalTask({ ...localTask, description: event.target.value })} className="min-h-[140px]" />
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
@@ -191,6 +185,7 @@ export function TaskDetailDrawer({
                   <label className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--text-muted)]">Status</label>
                   <select
                     value={localTask.status ?? "todo"}
+                    disabled={!canUpdateStatus}
                     onChange={(event) => updateLocalTask({ ...localTask, status: event.target.value as TaskRecord["status"] })}
                     className="flex h-10 w-full rounded-lg border border-border bg-[var(--surface)] px-3 text-sm"
                   >
@@ -203,6 +198,7 @@ export function TaskDetailDrawer({
                   <label className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--text-muted)]">Priority</label>
                   <select
                     value={localTask.priority ?? "medium"}
+                    disabled={!canFullyEdit}
                     onChange={(event) => updateLocalTask({ ...localTask, priority: event.target.value as TaskRecord["priority"] })}
                     className="flex h-10 w-full rounded-lg border border-border bg-[var(--surface)] px-3 text-sm"
                   >
@@ -216,20 +212,21 @@ export function TaskDetailDrawer({
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <label className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--text-muted)]">Due date</label>
-                  <Input type="date" value={localTask.due_date ?? ""} onChange={(event) => updateLocalTask({ ...localTask, due_date: event.target.value || null })} />
+                  <Input disabled={!canFullyEdit} type="date" value={localTask.due_date ?? ""} onChange={(event) => updateLocalTask({ ...localTask, due_date: event.target.value || null })} />
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--text-muted)]">Recurring rule</label>
-                  <Input value={localTask.recurring_rule ?? ""} onChange={(event) => updateLocalTask({ ...localTask, recurring_rule: event.target.value || null })} placeholder="weekly" />
+                  <Input disabled={!canFullyEdit} value={localTask.recurring_rule ?? ""} onChange={(event) => updateLocalTask({ ...localTask, recurring_rule: event.target.value || null })} placeholder="weekly" />
                 </div>
               </div>
 
               <div className="space-y-3">
                 <label className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--text-muted)]">Assignee</label>
-                <Input value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)} placeholder="Search members" />
+                <Input disabled={!canFullyEdit} value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)} placeholder="Search members" />
                 <div className="max-h-48 space-y-2 overflow-y-auto rounded-2xl border border-border bg-[var(--surface-2)] p-2">
                   <button
                     type="button"
+                    disabled={!canFullyEdit}
                     onClick={() => updateLocalTask({ ...localTask, assigned_to: null, assignee: null })}
                     className="flex w-full items-center rounded-xl px-3 py-2 text-left text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface)] hover:text-foreground"
                   >
@@ -239,6 +236,7 @@ export function TaskDetailDrawer({
                     <button
                       key={member.id}
                       type="button"
+                      disabled={!canFullyEdit}
                       onClick={() =>
                         updateLocalTask({
                           ...localTask,

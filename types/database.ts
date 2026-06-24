@@ -10,6 +10,7 @@ export type MembershipRole = "president" | "secretary" | "treasurer" | "committe
 export type PermissionLevel = "admin" | "committee" | "member";
 export type TaskStatus = "todo" | "in_progress" | "done";
 export type TaskPriority = "low" | "medium" | "high";
+export type TaskVisibility = "organization" | "team" | "private";
 export type ResourceType = "file" | "link" | "note";
 export type InviteStatus = "pending" | "accepted" | "expired";
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
@@ -39,7 +40,18 @@ export interface MembershipRow {
   organization_id: string;
   role: MembershipRole;
   permission_level: PermissionLevel;
+  team_id: string | null;
+  team_lead_user_id: string | null;
   joined_at: string | null;
+}
+
+export interface TeamRow {
+  id: string;
+  organization_id: string;
+  name: string;
+  lead_user_id: string;
+  created_by: string | null;
+  created_at: string | null;
 }
 
 export interface OrganizationRoleRow {
@@ -57,6 +69,9 @@ export interface TaskRow {
   description: string | null;
   assigned_to: string | null;
   created_by: string | null;
+  visibility: TaskVisibility | null;
+  team_id: string | null;
+  team_lead_user_id: string | null;
   source_meeting_id: string | null;
   due_date: string | null;
   status: TaskStatus | null;
@@ -174,6 +189,7 @@ type Tables = {
   users: UserRow;
   organizations: OrganizationRow;
   memberships: MembershipRow;
+  teams: TeamRow;
   organization_roles: OrganizationRoleRow;
   tasks: TaskRow;
   meetings: MeetingRow;
@@ -215,7 +231,18 @@ type InsertShape<T extends keyof Tables> =
               organization_id: string;
               role: MembershipRole;
               permission_level: PermissionLevel;
+              team_id?: string | null;
+              team_lead_user_id?: string | null;
               joined_at?: string | null;
+            }
+        : T extends "teams"
+          ? {
+              id?: string;
+              organization_id: string;
+              name: string;
+              lead_user_id: string;
+              created_by?: string | null;
+              created_at?: string | null;
             }
         : T extends "organization_roles"
           ? {
@@ -233,6 +260,9 @@ type InsertShape<T extends keyof Tables> =
               description?: string | null;
               assigned_to?: string | null;
               created_by?: string | null;
+              visibility?: TaskVisibility | null;
+              team_id?: string | null;
+              team_lead_user_id?: string | null;
               source_meeting_id?: string | null;
               due_date?: string | null;
               status?: TaskStatus | null;
