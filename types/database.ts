@@ -13,12 +13,14 @@ export type TaskPriority = "low" | "medium" | "high";
 export type TaskVisibility = "organization" | "team" | "private";
 export type ResourceType = "file" | "link" | "note";
 export type InviteStatus = "pending" | "accepted" | "expired";
+export type OnboardingProgressStatus = "submitted" | "approved";
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export interface UserRow {
   id: string;
   full_name: string | null;
   email: string | null;
+  phone: string | null;
   avatar_url: string | null;
   created_at: string | null;
 }
@@ -30,6 +32,7 @@ export interface OrganizationRow {
   type: OrganizationType | null;
   logo_url: string | null;
   join_code: string | null;
+  navigation_config: Json | null;
   created_by: string | null;
   created_at: string | null;
 }
@@ -185,6 +188,31 @@ export interface InviteRow {
   created_at: string | null;
 }
 
+export interface OnboardingItemRow {
+  id: string;
+  organization_id: string;
+  team_id: string | null;
+  title: string;
+  description: string | null;
+  required: boolean;
+  requires_approval: boolean;
+  position: number;
+  created_by: string | null;
+  created_at: string | null;
+}
+
+export interface OnboardingProgressRow {
+  id: string;
+  organization_id: string;
+  user_id: string;
+  item_id: string;
+  status: OnboardingProgressStatus;
+  submitted_at: string | null;
+  approved_at: string | null;
+  approved_by: string | null;
+  updated_at: string | null;
+}
+
 type Tables = {
   users: UserRow;
   organizations: OrganizationRow;
@@ -202,6 +230,8 @@ type Tables = {
   events: EventRow;
   activity_logs: ActivityLogRow;
   invites: InviteRow;
+  onboarding_items: OnboardingItemRow;
+  onboarding_progress: OnboardingProgressRow;
 };
 
 type InsertShape<T extends keyof Tables> =
@@ -210,6 +240,7 @@ type InsertShape<T extends keyof Tables> =
         id: string;
         full_name?: string | null;
         email?: string | null;
+        phone?: string | null;
         avatar_url?: string | null;
         created_at?: string | null;
       }
@@ -221,6 +252,7 @@ type InsertShape<T extends keyof Tables> =
           type?: OrganizationType | null;
           logo_url?: string | null;
           join_code?: string | null;
+          navigation_config?: Json | null;
           created_by?: string | null;
           created_at?: string | null;
         }
@@ -339,6 +371,7 @@ type InsertShape<T extends keyof Tables> =
                     ? {
                         id?: string;
                         organization_id: string;
+                        team_id?: string | null;
                         title: string;
                         content?: string | null;
                         pinned?: boolean | null;
@@ -373,9 +406,33 @@ type InsertShape<T extends keyof Tables> =
                               role?: MembershipRole;
                               invited_by?: string | null;
                               status?: InviteStatus;
-                              created_at?: string | null;
-                            }
-                        : never;
+                    created_at?: string | null;
+                  }
+                  : T extends "onboarding_items"
+                    ? {
+                        id?: string;
+                        organization_id: string;
+                        title: string;
+                        description?: string | null;
+                        required?: boolean;
+                        requires_approval?: boolean;
+                        position?: number;
+                        created_by?: string | null;
+                        created_at?: string | null;
+                      }
+                    : T extends "onboarding_progress"
+                      ? {
+                          id?: string;
+                          organization_id: string;
+                          user_id: string;
+                          item_id: string;
+                          status: OnboardingProgressStatus;
+                          submitted_at?: string | null;
+                          approved_at?: string | null;
+                          approved_by?: string | null;
+                          updated_at?: string | null;
+                        }
+                  : never;
 
 type UpdateShape<T extends keyof Tables> = Partial<InsertShape<T>>;
 

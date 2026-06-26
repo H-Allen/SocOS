@@ -103,6 +103,13 @@ export function getRoleBadgeClasses(role: MembershipRole) {
   return "bg-[var(--surface-2)] text-[var(--text-secondary)]";
 }
 
+export function roleHierarchyRank(role: MembershipRole) {
+  if (role === "president") return 0;
+  if (role === "secretary" || role === "treasurer") return 1;
+  if (role === "committee") return 2;
+  return 3;
+}
+
 export function formatRoleLabel(role: string) {
   return role
     .split("_")

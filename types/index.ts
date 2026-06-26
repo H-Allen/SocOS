@@ -8,6 +8,8 @@ import type {
   MeetingAgendaItemRow,
   MeetingRow,
   MembershipRole,
+  OnboardingItemRow,
+  OnboardingProgressRow,
   InviteRow,
   OrganizationRoleRow,
   OrganizationRow,
@@ -45,6 +47,12 @@ export interface MemberRecord extends MembershipRow {
 
 export interface TeamRecord extends TeamRow {
   lead: Pick<UserRow, "id" | "full_name" | "email" | "avatar_url"> | null;
+}
+
+export interface OnboardingItemRecord extends OnboardingItemRow {}
+
+export interface OnboardingProgressRecord extends OnboardingProgressRow {
+  approver: Pick<UserRow, "id" | "full_name" | "email" | "avatar_url"> | null;
 }
 
 export interface AnnouncementRecord extends AnnouncementRow {

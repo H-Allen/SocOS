@@ -1,7 +1,7 @@
 import { adminDb } from "@/lib/firebase/admin";
 import { getServerFirebaseUser, ensureUserProfile } from "@/lib/firebase/session";
 import { getServerActiveOrganization } from "@/lib/org-server";
-import { permissionForRole } from "@/lib/workspace";
+import { permissionForRole, roleHierarchyRank } from "@/lib/workspace";
 import type {
   ActivityLogWithActor,
   AnnouncementRecord,
@@ -16,6 +16,10 @@ import type {
   MeetingWithDetails,
   MembershipRole,
   MembershipRow,
+  OnboardingItemRecord,
+  OnboardingProgressRecord,
+  OnboardingProgressRow,
+  OnboardingItemRow,
   OrganizationRoleRecord,
   OrganizationRow,
   OrganizationWithMembership,
@@ -157,8 +161,13 @@ export async function getOrganizationRoles(orgId: string): Promise<OrganizationR
 export async function getOrgMembers(orgId: string): Promise<MemberRecord[]> {
   await requireOrganizationMember(orgId);
   const memberships = await getRows<MembershipRow>("memberships", [["organization_id", "==", orgId]]);
+  const ordered = [...memberships].sort((left, right) => {
+    const roleDiff = roleHierarchyRank(left.role) - roleHierarchyRank(right.role);
+    if (roleDiff !== 0) return roleDiff;
+    return String(left.joined_at ?? "").localeCompare(String(right.joined_at ?? ""));
+  });
   const hydrated = await Promise.all(
-    sortByDate(memberships, "joined_at", "asc").map(async (membership) => ({
+    ordered.map(async (membership) => ({
       ...membership,
       user: await getUserById(membership.user_id)
     }))
@@ -178,6 +187,29 @@ export async function getOrganizationTeams(orgId: string): Promise<TeamRecord[]>
   );
 
   return hydrated;
+}
+
+export async function getOrganizationOnboarding(orgId: string): Promise<{
+  items: OnboardingItemRecord[];
+  progress: OnboardingProgressRecord[];
+}> {
+  await requireOrganizationMember(orgId);
+  const [items, progress] = await Promise.all([
+    getRows<OnboardingItemRow>("onboarding_items", [["organization_id", "==", orgId]]),
+    getRows<OnboardingProgressRow>("onboarding_progress", [["organization_id", "==", orgId]])
+  ]);
+
+  const hydratedProgress = await Promise.all(
+    progress.map(async (entry) => ({
+      ...entry,
+      approver: await getUserById(entry.approved_by)
+    }))
+  );
+
+  return {
+    items: [...items].sort((left, right) => left.position - right.position),
+    progress: hydratedProgress
+  };
 }
 
 export async function getOrganizationResources(orgId: string): Promise<ResourceRecord[]> {

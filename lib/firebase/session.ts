@@ -30,6 +30,7 @@ export async function ensureUserProfile(uid: string, fallback?: Partial<UserRow>
       id: uid,
       full_name: fallback?.full_name ?? null,
       email: fallback?.email ?? null,
+      phone: fallback?.phone ?? null,
       avatar_url: fallback?.avatar_url ?? null,
       created_at: now
     };
@@ -43,6 +44,7 @@ export async function ensureUserProfile(uid: string, fallback?: Partial<UserRow>
 
   if (!existing.email && fallback?.email) updates.email = fallback.email;
   if (!existing.full_name && fallback?.full_name) updates.full_name = fallback.full_name;
+  if (!existing.phone && fallback?.phone) updates.phone = fallback.phone;
   if (!existing.avatar_url && fallback?.avatar_url) updates.avatar_url = fallback.avatar_url;
 
   if (Object.keys(updates).length) {

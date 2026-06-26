@@ -3,6 +3,7 @@ import { AlertTriangle, ArrowRight, CalendarDays, CheckCircle2, Target, Zap } fr
 import { redirect } from "next/navigation";
 
 import { Navbar } from "@/components/layout/Navbar";
+import { HomeProfilePanel } from "@/components/dashboard/HomeProfilePanel";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getServerActiveOrganization } from "@/lib/org-server";
@@ -10,6 +11,9 @@ import {
   getDashboardAnnouncements,
   getDashboardTasks,
   getHealthCounts,
+  getOrgMembers,
+  getOrganizationOnboarding,
+  getOrganizationTeams,
   getRecentActivity,
   getUpcomingMeetings,
   getUserWithMemberships
@@ -58,17 +62,22 @@ export default async function DashboardPage() {
     redirect("/onboarding");
   }
 
-  const [myTasks, upcomingMeetings, recentActivity, announcements, health] = await Promise.all([
+  const [myTasks, upcomingMeetings, recentActivity, announcements, health, members, teams, onboarding] = await Promise.all([
     getDashboardTasks(currentOrg.id, user.id),
     getUpcomingMeetings(currentOrg.id),
     getRecentActivity(currentOrg.id),
     getDashboardAnnouncements(currentOrg.id),
-    getHealthCounts(currentOrg.id)
+    getHealthCounts(currentOrg.id),
+    getOrgMembers(currentOrg.id),
+    getOrganizationTeams(currentOrg.id),
+    getOrganizationOnboarding(currentOrg.id)
   ]);
 
   const greeting = getTimeBasedGreeting();
   const today = formatLongDate(new Date());
   const healthy = health.overdueTasks === 0 && health.missingHandovers === 0;
+  const currentMember = members.find((member) => member.user_id === user.id) ?? null;
+  const currentTeam = currentMember?.team_id ? teams.find((team) => team.id === currentMember.team_id) ?? null : null;
 
   return (
     <div className="min-h-screen">
@@ -94,6 +103,17 @@ export default async function DashboardPage() {
                 </div>
               </div>
             </div>
+          </section>
+
+          <section className="xl:col-span-12">
+            <HomeProfilePanel
+              user={user}
+              currentOrg={currentOrg}
+              currentMember={currentMember}
+              team={currentTeam}
+              onboardingItems={onboarding.items}
+              onboardingProgress={onboarding.progress}
+            />
           </section>
 
           <div className="space-y-6 xl:col-span-8">

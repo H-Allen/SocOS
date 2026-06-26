@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 
 import { Navbar } from "@/components/layout/Navbar";
-import { MembersWorkspace } from "@/components/members/MembersWorkspace";
+import { MembersDirectory } from "@/components/members/MembersDirectory";
 import { getServerActiveOrganization } from "@/lib/org-server";
-import { getCurrentUser, getOrgMembers, getOrganizationTasks, getOrganizationTeams, getUserMemberships } from "@/lib/backend/queries";
+import { getCurrentUser, getOrgMembers, getOrganizationTeams, getUserMemberships } from "@/lib/backend/queries";
 
 export default async function MembersPage() {
   const [user, memberships] = await Promise.all([getCurrentUser(), getUserMemberships()]);
@@ -22,9 +22,8 @@ export default async function MembersPage() {
     redirect("/onboarding");
   }
 
-  const [members, tasks, teams] = await Promise.all([
+  const [members, teams] = await Promise.all([
     getOrgMembers(currentOrg.id),
-    getOrganizationTasks(currentOrg.id),
     getOrganizationTeams(currentOrg.id)
   ]);
 
@@ -32,14 +31,7 @@ export default async function MembersPage() {
     <div className="min-h-screen">
       <Navbar title="Members" user={user} />
       <div className="bg-grid min-h-[calc(100vh-5rem)] px-6 py-6">
-        <MembersWorkspace
-          initialMembers={members}
-          tasks={tasks}
-          teams={teams}
-          orgId={currentOrg.id}
-          currentUserId={user.id}
-          permissionLevel={currentOrg.membership.permission_level}
-        />
+        <MembersDirectory members={members} teams={teams} />
       </div>
     </div>
   );

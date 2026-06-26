@@ -1,19 +1,21 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { LogOut, Plus, Shield, Trash2, UserPlus, Users2 } from "lucide-react";
+import { CheckCircle2, Clock3, LogOut, Plus, Shield, Trash2, UserCheck, UserPlus, Users2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { createTeam as createTeamAction, inviteMember as inviteMemberAction, leaveOrganization, removeMember as removeMemberAction, updateMemberRole, updateMemberTeam } from "@/app/actions/members";
+import { approveOnboardingItem, createOnboardingItem, deleteOnboardingItem, submitOnboardingItem } from "@/app/actions/onboarding-checklist";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
 import { createBrowserBackendClient } from "@/lib/backend/client";
 import { ACTIVE_ORG_STORAGE_KEY } from "@/lib/org-state";
 import { canChangeRoles, formatRoleLabel, getInitials, getRoleBadgeClasses, permissionForRole, SOCIETY_ROLE_OPTIONS } from "@/lib/workspace";
-import type { ActivityLogWithActor, MemberRecord, MembershipRole, PermissionLevel, TaskRecord, TeamRecord } from "@/types";
+import type { ActivityLogWithActor, MemberRecord, MembershipRole, OnboardingItemRecord, OnboardingProgressRecord, PermissionLevel, TaskRecord, TeamRecord } from "@/types";
 import { formatDate, formatRelativeTime } from "@/utils/format";
 import { cn } from "@/utils/cn";
 
@@ -21,6 +23,8 @@ type MembersWorkspaceProps = {
   initialMembers: MemberRecord[];
   tasks: TaskRecord[];
   teams: TeamRecord[];
+  onboardingItems: OnboardingItemRecord[];
+  onboardingProgress: OnboardingProgressRecord[];
   orgId: string;
   currentUserId: string;
   permissionLevel: PermissionLevel;
@@ -36,12 +40,37 @@ const EMPTY_INVITE: InviteForm = {
   role: "member"
 };
 
-export function MembersWorkspace({ initialMembers, tasks, teams: initialTeams, orgId, currentUserId, permissionLevel }: MembersWorkspaceProps) {
+type OnboardingForm = {
+  title: string;
+  description: string;
+  required: boolean;
+  requiresApproval: boolean;
+};
+
+const EMPTY_ONBOARDING_FORM: OnboardingForm = {
+  title: "",
+  description: "",
+  required: true,
+  requiresApproval: true
+};
+
+export function MembersWorkspace({
+  initialMembers,
+  tasks,
+  teams: initialTeams,
+  onboardingItems: initialOnboardingItems,
+  onboardingProgress: initialOnboardingProgress,
+  orgId,
+  currentUserId,
+  permissionLevel
+}: MembersWorkspaceProps) {
   const router = useRouter();
   const backend = useMemo(() => createBrowserBackendClient(), []);
   const client = backend as any;
   const [members, setMembers] = useState(initialMembers);
   const [teams, setTeams] = useState(initialTeams);
+  const [onboardingItems, setOnboardingItems] = useState(initialOnboardingItems);
+  const [onboardingProgress, setOnboardingProgress] = useState(initialOnboardingProgress);
   const [view, setView] = useState<"table" | "grid">("table");
   const [search, setSearch] = useState("");
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -56,9 +85,13 @@ export function MembersWorkspace({ initialMembers, tasks, teams: initialTeams, o
   const [teamOpen, setTeamOpen] = useState(false);
   const [teamName, setTeamName] = useState("");
   const [isCreatingTeam, setIsCreatingTeam] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [onboardingForm, setOnboardingForm] = useState(EMPTY_ONBOARDING_FORM);
+  const [isSavingOnboarding, setIsSavingOnboarding] = useState(false);
 
   const canAdmin = canChangeRoles(permissionLevel);
   const canManageTeams = permissionLevel === "admin" || permissionLevel === "committee";
+  const canManageOnboarding = canManageTeams;
 
   const filteredMembers = useMemo(() => {
     return members.filter((member) => {
@@ -73,6 +106,25 @@ export function MembersWorkspace({ initialMembers, tasks, teams: initialTeams, o
   );
 
   const teamById = useMemo(() => new Map(teams.map((team) => [team.id, team])), [teams]);
+  const progressByMemberAndItem = useMemo(() => {
+    const map = new Map<string, OnboardingProgressRecord>();
+    onboardingProgress.forEach((entry) => map.set(`${entry.user_id}_${entry.item_id}`, entry));
+    return map;
+  }, [onboardingProgress]);
+
+  const getOnboardingSummary = (member: MemberRecord) => {
+    const requiredItems = onboardingItems.filter((item) => item.required);
+    const trackedItems = requiredItems.length ? requiredItems : onboardingItems;
+    const approved = trackedItems.filter((item) => progressByMemberAndItem.get(`${member.user_id}_${item.id}`)?.status === "approved").length;
+    const submitted = trackedItems.filter((item) => progressByMemberAndItem.get(`${member.user_id}_${item.id}`)?.status === "submitted").length;
+    const touched = trackedItems.filter((item) => progressByMemberAndItem.has(`${member.user_id}_${item.id}`)).length;
+    const total = trackedItems.length;
+    const state = total === 0 ? "not_configured" : approved === total ? "complete" : touched === 0 ? "not_started" : "partial";
+
+    return { approved, submitted, total, state };
+  };
+
+  const canApproveMember = (member: MemberRecord) => canAdmin || member.team_lead_user_id === currentUserId;
 
   useEffect(() => {
     if (!selectedMember) {
@@ -191,6 +243,81 @@ export function MembersWorkspace({ initialMembers, tasks, teams: initialTeams, o
     setIsCreatingTeam(false);
   };
 
+  const createChecklistItem = async () => {
+    if (!onboardingForm.title.trim()) {
+      return;
+    }
+
+    setIsSavingOnboarding(true);
+    setMemberActionError(null);
+    const result = await createOnboardingItem({
+      organizationId: orgId,
+      title: onboardingForm.title,
+      description: onboardingForm.description,
+      required: onboardingForm.required,
+      requiresApproval: onboardingForm.requiresApproval
+    });
+
+    if (result.error || !result.item) {
+      setMemberActionError(result.error ?? "Could not create onboarding item.");
+    } else {
+      setOnboardingItems((current) => [...current, result.item as OnboardingItemRecord]);
+      setOnboardingForm(EMPTY_ONBOARDING_FORM);
+      setOnboardingOpen(false);
+    }
+
+    setIsSavingOnboarding(false);
+  };
+
+  const deleteChecklistItem = async (itemId: string) => {
+    setMemberActionError(null);
+    const result = await deleteOnboardingItem({ organizationId: orgId, itemId });
+
+    if (result.error) {
+      setMemberActionError(result.error);
+    } else {
+      setOnboardingItems((current) => current.filter((item) => item.id !== itemId));
+      setOnboardingProgress((current) => current.filter((entry) => entry.item_id !== itemId));
+    }
+  };
+
+  const upsertProgress = (progress: OnboardingProgressRecord) => {
+    setOnboardingProgress((current) => {
+      const exists = current.some((entry) => entry.id === progress.id);
+      return exists ? current.map((entry) => (entry.id === progress.id ? progress : entry)) : [...current, progress];
+    });
+  };
+
+  const submitChecklistItem = async (member: MemberRecord, item: OnboardingItemRecord) => {
+    setMemberActionError(null);
+    const result = await submitOnboardingItem({
+      organizationId: orgId,
+      userId: member.user_id,
+      itemId: item.id
+    });
+
+    if (result.error || !result.progress) {
+      setMemberActionError(result.error ?? "Could not update onboarding progress.");
+    } else {
+      upsertProgress(result.progress);
+    }
+  };
+
+  const approveChecklistItem = async (member: MemberRecord, item: OnboardingItemRecord) => {
+    setMemberActionError(null);
+    const result = await approveOnboardingItem({
+      organizationId: orgId,
+      userId: member.user_id,
+      itemId: item.id
+    });
+
+    if (result.error || !result.progress) {
+      setMemberActionError(result.error ?? "Could not approve onboarding item.");
+    } else {
+      upsertProgress(result.progress);
+    }
+  };
+
   const removeMember = async () => {
     if (!memberToRemove) {
       return;
@@ -295,6 +422,50 @@ export function MembersWorkspace({ initialMembers, tasks, teams: initialTeams, o
       </section>
 
       <section className="rounded-[24px] border border-border bg-[color-mix(in_srgb,var(--surface)_96%,transparent)] p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">New member onboarding</h2>
+            <p className="mt-1 max-w-2xl text-sm text-[var(--text-secondary)]">
+              Create the standard induction list for every new member. Items that require approval let members submit completion for their head to verify.
+            </p>
+          </div>
+          {canManageOnboarding ? (
+            <Button variant="outline" onClick={() => setOnboardingOpen(true)}>
+              <Plus className="h-4 w-4" />
+              Add onboarding item
+            </Button>
+          ) : null}
+        </div>
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {onboardingItems.length ? (
+            onboardingItems.map((item) => (
+              <div key={item.id} className="rounded-2xl border border-border bg-[var(--surface-2)] p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-foreground">{item.title}</p>
+                    {item.description ? <p className="mt-1 line-clamp-2 text-sm text-[var(--text-secondary)]">{item.description}</p> : null}
+                  </div>
+                  {canManageOnboarding ? (
+                    <button type="button" onClick={() => void deleteChecklistItem(item.id)} className="rounded-lg p-1 text-[var(--text-muted)] hover:bg-[var(--surface)] hover:text-red-500">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {item.required ? <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700">Required</span> : null}
+                  {item.requires_approval ? <span className="rounded-full bg-blue-100 px-2 py-1 text-xs font-semibold text-blue-700">Needs approval</span> : null}
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="rounded-2xl border border-dashed border-border bg-[var(--surface-2)] px-4 py-6 text-sm text-[var(--text-secondary)] md:col-span-2 xl:col-span-4">
+              No onboarding items yet. Add things like pay membership, join Slack, request Drive access, and connect GitHub.
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-[24px] border border-border bg-[color-mix(in_srgb,var(--surface)_96%,transparent)] p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-semibold text-foreground">Teams</h2>
@@ -313,6 +484,9 @@ export function MembersWorkspace({ initialMembers, tasks, teams: initialTeams, o
           {teams.length ? (
             teams.map((team) => {
               const count = members.filter((member) => member.team_id === team.id).length;
+              const teamMembers = members.filter((member) => member.team_id === team.id);
+              const complete = teamMembers.filter((member) => getOnboardingSummary(member).state === "complete").length;
+              const pending = teamMembers.filter((member) => getOnboardingSummary(member).submitted > 0).length;
               return (
                 <div key={team.id} className="rounded-2xl border border-border bg-[var(--surface-2)] p-4">
                   <div className="flex items-start justify-between gap-3">
@@ -326,6 +500,16 @@ export function MembersWorkspace({ initialMembers, tasks, teams: initialTeams, o
                       {count} {count === 1 ? "member" : "members"}
                     </span>
                   </div>
+                  {onboardingItems.length ? (
+                    <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+                      <div className="rounded-xl bg-[var(--surface)] px-3 py-2 text-[var(--text-secondary)]">
+                        <span className="font-semibold text-foreground">{complete}</span> fully inducted
+                      </div>
+                      <div className="rounded-xl bg-[var(--surface)] px-3 py-2 text-[var(--text-secondary)]">
+                        <span className="font-semibold text-foreground">{pending}</span> awaiting approval
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               );
             })
@@ -339,17 +523,19 @@ export function MembersWorkspace({ initialMembers, tasks, teams: initialTeams, o
 
       {view === "table" ? (
         <section className="overflow-hidden rounded-[24px] border border-border bg-[color-mix(in_srgb,var(--surface)_96%,transparent)]">
-          <div className="grid grid-cols-[minmax(0,1.4fr)_140px_180px_minmax(0,1fr)_120px_80px] gap-3 border-b border-border px-5 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
+          <div className="grid grid-cols-[minmax(0,1.4fr)_140px_180px_150px_minmax(0,1fr)_80px] gap-3 border-b border-border px-5 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
             <span>Member</span>
             <span>Role</span>
             <span>Team</span>
+            <span>Onboarding</span>
             <span>Email</span>
-            <span>Joined</span>
             <span />
           </div>
           <div className="divide-y divide-border">
-            {filteredMembers.map((member) => (
-              <div key={member.id} className="grid grid-cols-[minmax(0,1.4fr)_140px_180px_minmax(0,1fr)_120px_80px] gap-3 px-5 py-4">
+            {filteredMembers.map((member) => {
+              const summary = getOnboardingSummary(member);
+              return (
+              <div key={member.id} className="grid grid-cols-[minmax(0,1.4fr)_140px_180px_150px_minmax(0,1fr)_80px] gap-3 px-5 py-4">
                 <button type="button" onClick={() => setSelectedMember(member)} className="flex items-center gap-3 text-left">
                   <Avatar className="h-8 w-8">
                     <AvatarImage src={member.user?.avatar_url ?? undefined} alt={member.user?.full_name ?? member.user?.email ?? "Member"} />
@@ -397,8 +583,25 @@ export function MembersWorkspace({ initialMembers, tasks, teams: initialTeams, o
                     </span>
                   )}
                 </div>
+                <span
+                  className={cn(
+                    "inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-semibold",
+                    summary.state === "complete"
+                      ? "bg-emerald-100 text-emerald-700"
+                      : summary.state === "partial"
+                        ? "bg-amber-100 text-amber-700"
+                        : "bg-[var(--surface-2)] text-[var(--text-secondary)]"
+                  )}
+                >
+                  {summary.state === "complete"
+                    ? "Fully inducted"
+                    : summary.state === "partial"
+                      ? `${summary.approved}/${summary.total} approved`
+                      : summary.state === "not_configured"
+                        ? "Not configured"
+                        : "Not started"}
+                </span>
                 <span className="truncate text-sm text-[var(--text-secondary)]">{member.user?.email ?? "No email"}</span>
-                <span className="text-sm text-[var(--text-secondary)]">{formatDate(member.joined_at)}</span>
                 <div className="flex justify-end">
                   {canAdmin ? (
                     <Button variant="ghost" size="icon" onClick={() => setMemberToRemove(member)}>
@@ -407,35 +610,42 @@ export function MembersWorkspace({ initialMembers, tasks, teams: initialTeams, o
                   ) : null}
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
         </section>
       ) : (
         <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {filteredMembers.map((member) => (
-            <button
-              key={member.id}
-              type="button"
-              onClick={() => setSelectedMember(member)}
-              className="rounded-2xl border border-border bg-[color-mix(in_srgb,var(--surface)_96%,transparent)] p-5 text-left transition-all hover:-translate-y-0.5 hover:shadow-[0_18px_50px_rgba(17,17,24,0.08)]"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <Avatar className="h-12 w-12">
-                  <AvatarImage src={member.user?.avatar_url ?? undefined} alt={member.user?.full_name ?? member.user?.email ?? "Member"} />
-                  <AvatarFallback>{getInitials(member.user?.full_name ?? null, member.user?.email ?? null)}</AvatarFallback>
-                </Avatar>
-                <span className={cn("rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]", getRoleBadgeClasses(member.role))}>
-                  {formatRoleLabel(member.role)}
-                </span>
-              </div>
-              <h2 className="mt-4 text-lg font-semibold text-foreground">{member.user?.full_name ?? member.user?.email ?? "Unknown member"}</h2>
-              <p className="mt-1 text-sm text-[var(--text-secondary)]">{member.user?.email ?? "No email"}</p>
-              <p className="mt-3 text-sm text-[var(--text-secondary)]">
-                Team: {member.team_id ? teamById.get(member.team_id)?.name ?? "Unknown team" : "Exec / unassigned"}
-              </p>
-              <p className="mt-4 text-sm text-[var(--text-secondary)]">Joined {formatDate(member.joined_at)}</p>
-            </button>
-          ))}
+          {filteredMembers.map((member) => {
+            const summary = getOnboardingSummary(member);
+            return (
+              <button
+                key={member.id}
+                type="button"
+                onClick={() => setSelectedMember(member)}
+                className="rounded-2xl border border-border bg-[color-mix(in_srgb,var(--surface)_96%,transparent)] p-5 text-left transition-all hover:-translate-y-0.5 hover:shadow-[0_18px_50px_rgba(17,17,24,0.08)]"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <Avatar className="h-12 w-12">
+                    <AvatarImage src={member.user?.avatar_url ?? undefined} alt={member.user?.full_name ?? member.user?.email ?? "Member"} />
+                    <AvatarFallback>{getInitials(member.user?.full_name ?? null, member.user?.email ?? null)}</AvatarFallback>
+                  </Avatar>
+                  <span className={cn("rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]", getRoleBadgeClasses(member.role))}>
+                    {formatRoleLabel(member.role)}
+                  </span>
+                </div>
+                <h2 className="mt-4 text-lg font-semibold text-foreground">{member.user?.full_name ?? member.user?.email ?? "Unknown member"}</h2>
+                <p className="mt-1 text-sm text-[var(--text-secondary)]">{member.user?.email ?? "No email"}</p>
+                <p className="mt-3 text-sm text-[var(--text-secondary)]">
+                  Team: {member.team_id ? teamById.get(member.team_id)?.name ?? "Unknown team" : "Exec / unassigned"}
+                </p>
+                <div className="mt-4 rounded-2xl bg-[var(--surface-2)] px-4 py-3 text-sm text-[var(--text-secondary)]">
+                  <span className="font-semibold text-foreground">{summary.approved}/{summary.total}</span> onboarding checks approved
+                </div>
+                <p className="mt-4 text-sm text-[var(--text-secondary)]">Joined {formatDate(member.joined_at)}</p>
+              </button>
+            );
+          })}
         </section>
       )}
 
@@ -493,6 +703,53 @@ export function MembersWorkspace({ initialMembers, tasks, teams: initialTeams, o
               </Button>
               <Button onClick={() => void createTeam()} disabled={isCreatingTeam || !teamName.trim()}>
                 {isCreatingTeam ? "Creating..." : "Create team"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={onboardingOpen} onOpenChange={setOnboardingOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add onboarding item</DialogTitle>
+            <DialogDescription>Add a standard step every new member should complete.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 p-6 pt-2">
+            <Input
+              value={onboardingForm.title}
+              onChange={(event) => setOnboardingForm((current) => ({ ...current, title: event.target.value }))}
+              placeholder="e.g. Pay membership fee"
+            />
+            <Textarea
+              value={onboardingForm.description}
+              onChange={(event) => setOnboardingForm((current) => ({ ...current, description: event.target.value }))}
+              placeholder="Explain what the member needs to do or where to go."
+              className="min-h-[100px]"
+            />
+            <label className="flex items-center gap-3 rounded-2xl border border-border bg-[var(--surface-2)] px-4 py-3 text-sm text-foreground">
+              <input
+                type="checkbox"
+                checked={onboardingForm.required}
+                onChange={(event) => setOnboardingForm((current) => ({ ...current, required: event.target.checked }))}
+              />
+              Required for full induction
+            </label>
+            <label className="flex items-center gap-3 rounded-2xl border border-border bg-[var(--surface-2)] px-4 py-3 text-sm text-foreground">
+              <input
+                type="checkbox"
+                checked={onboardingForm.requiresApproval}
+                onChange={(event) => setOnboardingForm((current) => ({ ...current, requiresApproval: event.target.checked }))}
+              />
+              Requires head/admin approval
+            </label>
+            {memberActionError ? <p className="text-sm font-medium text-red-400">{memberActionError}</p> : null}
+            <div className="flex justify-end gap-3">
+              <Button variant="ghost" onClick={() => setOnboardingOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={() => void createChecklistItem()} disabled={isSavingOnboarding || !onboardingForm.title.trim()}>
+                {isSavingOnboarding ? "Saving..." : "Add item"}
               </Button>
             </div>
           </div>
@@ -573,6 +830,75 @@ export function MembersWorkspace({ initialMembers, tasks, teams: initialTeams, o
                 <div className="rounded-2xl border border-border bg-[var(--surface-2)] p-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Joined</p>
                   <p className="mt-2 text-sm text-foreground">{formatDate(selectedMember.joined_at)}</p>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--text-secondary)]">Onboarding</h3>
+                    {(() => {
+                      const summary = getOnboardingSummary(selectedMember);
+                      return (
+                        <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                          {summary.approved}/{summary.total} approved
+                        </span>
+                      );
+                    })()}
+                  </div>
+                  <div className="space-y-3">
+                    {onboardingItems.length ? (
+                      onboardingItems.map((item) => {
+                        const progress = progressByMemberAndItem.get(`${selectedMember.user_id}_${item.id}`);
+                        const isOwnProfile = selectedMember.user_id === currentUserId;
+                        const approvable = canApproveMember(selectedMember);
+                        const isApproved = progress?.status === "approved";
+                        const isSubmitted = progress?.status === "submitted";
+                        return (
+                          <div key={item.id} className="rounded-2xl border border-border bg-[var(--surface-2)] p-4">
+                            <div className="flex items-start gap-3">
+                              <div
+                                className={cn(
+                                  "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl",
+                                  isApproved ? "bg-emerald-100 text-emerald-700" : isSubmitted ? "bg-amber-100 text-amber-700" : "bg-[var(--surface)] text-[var(--text-muted)]"
+                                )}
+                              >
+                                {isApproved ? <CheckCircle2 className="h-4 w-4" /> : isSubmitted ? <Clock3 className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="font-medium text-foreground">{item.title}</p>
+                                  {item.required ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">Required</span> : null}
+                                </div>
+                                {item.description ? <p className="mt-1 text-sm text-[var(--text-secondary)]">{item.description}</p> : null}
+                                <p className="mt-2 text-xs text-[var(--text-muted)]">
+                                  {isApproved
+                                    ? `Approved${progress.approver?.full_name ? ` by ${progress.approver.full_name}` : ""}`
+                                    : isSubmitted
+                                      ? "Submitted, waiting for approval"
+                                      : "Not started"}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="mt-4 flex flex-wrap justify-end gap-2">
+                              {!isApproved && (isOwnProfile || approvable) ? (
+                                <Button size="sm" variant={isSubmitted ? "outline" : "default"} onClick={() => void submitChecklistItem(selectedMember, item)}>
+                                  {item.requires_approval ? "Mark done" : "Complete"}
+                                </Button>
+                              ) : null}
+                              {!isApproved && (isSubmitted || approvable) && approvable ? (
+                                <Button size="sm" onClick={() => void approveChecklistItem(selectedMember, item)}>
+                                  Approve
+                                </Button>
+                              ) : null}
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="rounded-2xl border border-dashed border-border bg-[var(--surface-2)] px-4 py-6 text-sm text-[var(--text-secondary)]">
+                        No onboarding checklist has been configured yet.
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-3">

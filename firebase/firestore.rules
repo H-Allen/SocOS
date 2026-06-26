@@ -85,6 +85,16 @@ service cloud.firestore {
         (canManage(resource.data.organization_id) && resource.data.lead_user_id == request.auth.uid);
     }
 
+    match /onboarding_items/{itemId} {
+      allow read: if isMember(resource.data.organization_id);
+      allow create, update, delete: if false;
+    }
+
+    match /onboarding_progress/{progressId} {
+      allow read: if isMember(resource.data.organization_id);
+      allow create, update, delete: if false;
+    }
+
     match /tasks/{taskId} {
       allow read: if isMember(resource.data.organization_id) &&
         (resource.data.visibility != "private" || resource.data.created_by == request.auth.uid);

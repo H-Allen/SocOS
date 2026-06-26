@@ -3,22 +3,14 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ComponentType } from "react";
 import {
-  BookOpen,
-  Calendar,
-  CalendarDays,
   Check,
-  CheckSquare,
   ChevronDown,
-  FolderOpen,
-  LayoutDashboard,
-  Megaphone,
   Settings,
-  Users
 } from "lucide-react";
 
 import { useOrg } from "@/lib/org-context";
+import { getNavigationItems } from "@/lib/navigation";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -31,17 +23,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/utils/cn";
 import type { UserRow } from "@/types";
-
-const navItems: Array<{ href: Route; label: string; icon: ComponentType<{ className?: string }> }> = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/tasks", label: "Tasks", icon: CheckSquare },
-  { href: "/meetings", label: "Meetings", icon: Calendar },
-  { href: "/resources", label: "Resources", icon: FolderOpen },
-  { href: "/handovers", label: "Handovers", icon: BookOpen },
-  { href: "/members", label: "Members", icon: Users },
-  { href: "/calendar", label: "Calendar", icon: CalendarDays },
-  { href: "/announcements", label: "Announcements", icon: Megaphone }
-];
 
 const settingsHref: Route = "/settings";
 
@@ -63,6 +44,7 @@ function getInitials(name: string | null, email: string | null) {
 export function Sidebar({ user }: SidebarProps) {
   const pathname = usePathname();
   const { currentOrg, memberships, setCurrentOrg } = useOrg();
+  const navItems = getNavigationItems(currentOrg?.navigation_config, currentOrg?.membership.permission_level !== "member");
 
   return (
     <aside className="fixed inset-y-0 left-0 z-40 flex h-screen w-[240px] flex-col border-r border-border bg-[var(--surface)]">
@@ -104,13 +86,13 @@ export function Sidebar({ user }: SidebarProps) {
 
       <nav className="flex-1 px-3 py-4">
         <ul className="space-y-1.5">
-          {navItems.map(({ href, label, icon: Icon }) => {
+          {navItems.map(({ id, href, label, icon: Icon }) => {
             const isActive = pathname === href || pathname.startsWith(`${href}/`);
 
             return (
-              <li key={href}>
+              <li key={id}>
                 <Link
-                  href={href}
+                  href={href as Route}
                   className={cn(
                     "group relative flex items-center rounded-xl px-3 py-2.5 text-sm font-medium transition-all",
                     isActive

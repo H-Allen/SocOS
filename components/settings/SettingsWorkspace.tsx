@@ -1,15 +1,17 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, Building2, CalendarDays, Copy, CreditCard, FolderOpen, ImagePlus, Plus, Slack, Trash2 } from "lucide-react";
+import { AlertTriangle, Building2, CalendarDays, Copy, CreditCard, FolderOpen, ImagePlus, Plus, Slack, Trash2, X } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { ensureOrganizationJoinCode } from "@/app/actions/settings";
+import { ensureOrganizationJoinCode, updateNavigationConfig } from "@/app/actions/settings";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createBrowserBackendClient } from "@/lib/backend/client";
+import { builtInNavItems, parseNavigationConfig, type CustomNavItem, type NavigationConfig } from "@/lib/navigation";
 import { formatRoleLabel, isAdmin } from "@/lib/workspace";
 import type { OrganizationRoleRecord, OrganizationRow, OrganizationType, PermissionLevel } from "@/types";
 import { cn } from "@/utils/cn";
@@ -56,8 +58,54 @@ export function SettingsWorkspace({ organization, initialRoles, permissionLevel 
   const [deletingOrg, setDeletingOrg] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [generatingCode, setGeneratingCode] = useState(false);
+  const [navigationConfig, setNavigationConfig] = useState<NavigationConfig>(() => parseNavigationConfig(organization.navigation_config));
+  const [newNavLabel, setNewNavLabel] = useState("");
+  const [newNavHref, setNewNavHref] = useState("");
+  const [savingNavigation, setSavingNavigation] = useState(false);
+  const [navigationError, setNavigationError] = useState<string | null>(null);
 
   const allRoles = [...builtInRoles, ...roles];
+
+  const toggleBuiltInTab = (id: NavigationConfig["visibleBuiltIns"][number]) => {
+    if (id === "dashboard") return;
+    setNavigationConfig((current) => ({
+      ...current,
+      visibleBuiltIns: current.visibleBuiltIns.includes(id)
+        ? current.visibleBuiltIns.filter((item) => item !== id)
+        : [...current.visibleBuiltIns, id]
+    }));
+  };
+
+  const addCustomNavItem = () => {
+    if (!newNavLabel.trim() || !newNavHref.trim()) return;
+    const item: CustomNavItem = {
+      id: `custom-${Date.now()}`,
+      label: newNavLabel.trim(),
+      href: newNavHref.trim(),
+      visibleToMembers: true
+    };
+    setNavigationConfig((current) => ({ ...current, customItems: [...current.customItems, item] }));
+    setNewNavLabel("");
+    setNewNavHref("");
+  };
+
+  const saveNavigation = async () => {
+    setSavingNavigation(true);
+    setNavigationError(null);
+    const result = await updateNavigationConfig({
+      organizationId: orgState.id,
+      visibleBuiltIns: navigationConfig.visibleBuiltIns,
+      customItems: navigationConfig.customItems
+    });
+
+    if (result.error) {
+      setNavigationError(result.error);
+    } else {
+      setOrgState((current) => ({ ...current, navigation_config: navigationConfig as unknown as OrganizationRow["navigation_config"] }));
+    }
+
+    setSavingNavigation(false);
+  };
 
   const copyJoinCode = async () => {
     if (!orgState.join_code) return;
@@ -193,6 +241,8 @@ export function SettingsWorkspace({ organization, initialRoles, permissionLevel 
       <Tabs defaultValue="general">
         <TabsList>
           <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="directory">Directory</TabsTrigger>
+          <TabsTrigger value="navigation">Navigation</TabsTrigger>
           <TabsTrigger value="branding">Branding</TabsTrigger>
           <TabsTrigger value="roles">Roles</TabsTrigger>
           <TabsTrigger value="integrations">Integrations</TabsTrigger>
@@ -247,6 +297,135 @@ export function SettingsWorkspace({ organization, initialRoles, permissionLevel 
               <Button onClick={() => void saveGeneral()} disabled={savingGeneral}>
                 {savingGeneral ? "Saving..." : "Save changes"}
               </Button>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="directory">
+          <div className="grid gap-6 xl:grid-cols-2">
+            <div className="rounded-[24px] border border-border bg-[color-mix(in_srgb,var(--surface)_96%,transparent)] p-6">
+              <p className="text-sm font-medium text-foreground">Directory management</p>
+              <h3 className="mt-3 text-2xl font-semibold text-foreground">Teams and member assignment</h3>
+              <p className="mt-3 text-sm text-[var(--text-secondary)]">
+                The Members page is now a read-only directory. Committee and admins manage teams, team leaders, team membership, and team-specific induction from the Teams cockpit.
+              </p>
+              <Button asChild className="mt-5">
+                <Link href="/teams">Open Teams cockpit</Link>
+              </Button>
+            </div>
+            <div className="rounded-[24px] border border-border bg-[color-mix(in_srgb,var(--surface)_96%,transparent)] p-6">
+              <p className="text-sm font-medium text-foreground">Society hierarchy</p>
+              <div className="mt-5 space-y-3">
+                {["President", "Secretary / Treasurer", "Committee", "Members"].map((label, index) => (
+                  <div key={label} className="flex items-center gap-3 rounded-2xl border border-border bg-[var(--surface)] px-4 py-3">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-sm font-semibold text-primary">{index + 1}</span>
+                    <span className="text-sm font-medium text-foreground">{label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="navigation">
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+            <div className="rounded-[24px] border border-border bg-[color-mix(in_srgb,var(--surface)_96%,transparent)] p-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Member navigation</p>
+                  <h3 className="mt-3 text-2xl font-semibold text-foreground">Choose which tabs show in the app</h3>
+                  <p className="mt-3 max-w-2xl text-sm text-[var(--text-secondary)]">
+                    President, Secretary, and Treasurer can customise the sidebar for the society. Dashboard always stays visible so members can reach their profile and onboarding.
+                  </p>
+                </div>
+                <Button onClick={() => void saveNavigation()} disabled={!canAdmin || savingNavigation}>
+                  {savingNavigation ? "Saving..." : "Save navigation"}
+                </Button>
+              </div>
+              {navigationError ? <p className="mt-4 text-sm font-medium text-red-500">{navigationError}</p> : null}
+              <div className="mt-6 grid gap-3 md:grid-cols-2">
+                {builtInNavItems.map((item) => {
+                  const Icon = item.icon;
+                  const checked = navigationConfig.visibleBuiltIns.includes(item.id);
+                  return (
+                    <label key={item.id} className="flex cursor-pointer gap-4 rounded-2xl border border-border bg-[var(--surface)] p-4">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={!canAdmin || item.id === "dashboard"}
+                        onChange={() => toggleBuiltInTab(item.id)}
+                        className="mt-1"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <Icon className="h-4 w-4 text-primary" />
+                          <p className="font-medium text-foreground">{item.label}</p>
+                        </div>
+                        <p className="mt-2 text-sm text-[var(--text-secondary)]">{item.description}</p>
+                        {item.id === "dashboard" ? <p className="mt-2 text-xs font-semibold text-primary">Always visible</p> : null}
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="rounded-[24px] border border-border bg-[color-mix(in_srgb,var(--surface)_96%,transparent)] p-6">
+              <p className="text-sm font-medium text-foreground">Custom tabs</p>
+              <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                Add society-specific links such as a shop, external wiki, Discord, sponsor portal, or competition dashboard.
+              </p>
+              <div className="mt-5 space-y-3">
+                <Input value={newNavLabel} onChange={(event) => setNewNavLabel(event.target.value)} placeholder="Tab label, e.g. Shop" disabled={!canAdmin} />
+                <Input value={newNavHref} onChange={(event) => setNewNavHref(event.target.value)} placeholder="/internal-page or https://example.com" disabled={!canAdmin} />
+                <Button type="button" variant="outline" onClick={addCustomNavItem} disabled={!canAdmin || !newNavLabel.trim() || !newNavHref.trim()}>
+                  <Plus className="h-4 w-4" />
+                  Add custom tab
+                </Button>
+              </div>
+              <div className="mt-6 space-y-3">
+                {navigationConfig.customItems.length ? (
+                  navigationConfig.customItems.map((item) => (
+                    <div key={item.id} className="rounded-2xl border border-border bg-[var(--surface)] p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium text-foreground">{item.label}</p>
+                          <p className="mt-1 truncate text-sm text-[var(--text-secondary)]">{item.href}</p>
+                        </div>
+                        {canAdmin ? (
+                          <button
+                            type="button"
+                            onClick={() => setNavigationConfig((current) => ({ ...current, customItems: current.customItems.filter((entry) => entry.id !== item.id) }))}
+                            className="rounded-lg p-1 text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-red-500"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        ) : null}
+                      </div>
+                      <label className="mt-3 flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+                        <input
+                          type="checkbox"
+                          checked={item.visibleToMembers}
+                          disabled={!canAdmin}
+                          onChange={(event) =>
+                            setNavigationConfig((current) => ({
+                              ...current,
+                              customItems: current.customItems.map((entry) =>
+                                entry.id === item.id ? { ...entry, visibleToMembers: event.target.checked } : entry
+                              )
+                            }))
+                          }
+                        />
+                        Visible to members
+                      </label>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-border bg-[var(--surface)] px-4 py-6 text-sm text-[var(--text-secondary)]">
+                    No custom tabs yet.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </TabsContent>

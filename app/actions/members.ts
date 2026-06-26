@@ -270,6 +270,7 @@ export async function updateMemberTeam(input: {
 export async function createTeam(input: {
   organizationId: string;
   name: string;
+  leadUserId?: string | null;
 }): Promise<{ team: { id: string; organization_id: string; name: string; lead_user_id: string; created_by: string; created_at: string } | null; error: string | null }> {
   const auth = await requireTeamManager(input.organizationId);
 
@@ -294,6 +295,15 @@ export async function createTeam(input: {
     return { team: null, error: "A team with that name already exists." };
   }
 
+  const managerPermission = effectivePermission(auth.membership ?? undefined);
+  const leadUserId = managerPermission === "admin" && input.leadUserId ? input.leadUserId : auth.user.uid;
+  const leadMembership = await adminDb.collection("memberships").doc(`${input.organizationId}_${leadUserId}`).get();
+  const leadData = leadMembership.data();
+
+  if (!leadMembership.exists || leadData?.organization_id !== input.organizationId || effectivePermission(leadData) === "member") {
+    return { team: null, error: "Choose a valid committee lead." };
+  }
+
   const now = nowIso();
   const teamRef = adminDb.collection("teams").doc();
   const activityRef = adminDb.collection("activity_logs").doc();
@@ -301,7 +311,7 @@ export async function createTeam(input: {
     id: teamRef.id,
     organization_id: input.organizationId,
     name,
-    lead_user_id: auth.user.uid,
+    lead_user_id: leadUserId,
     created_by: auth.user.uid,
     created_at: now
   };
@@ -322,6 +332,90 @@ export async function createTeam(input: {
   revalidatePath("/tasks");
 
   return { team, error: null };
+}
+
+export async function updateTeam(input: {
+  organizationId: string;
+  teamId: string;
+  name?: string;
+  leadUserId?: string | null;
+}): Promise<{ error: string | null }> {
+  const auth = await requireTeamManager(input.organizationId);
+
+  if (auth.error || !auth.user || !auth.membership) {
+    return { error: auth.error };
+  }
+
+  const teamRef = adminDb.collection("teams").doc(input.teamId);
+  const team = await teamRef.get();
+  const teamData = team.data();
+
+  if (!team.exists || teamData?.organization_id !== input.organizationId) {
+    return { error: "Team not found." };
+  }
+
+  const managerPermission = effectivePermission(auth.membership);
+  const isLead = teamData.lead_user_id === auth.user.uid;
+
+  if (managerPermission !== "admin" && !isLead) {
+    return { error: "Committee members can only update teams they lead." };
+  }
+
+  const update: Record<string, unknown> = {};
+
+  if (typeof input.name === "string") {
+    const name = input.name.trim();
+    if (name.length < 2) return { error: "Team name must be at least 2 characters." };
+    update.name = name;
+  }
+
+  if (input.leadUserId && input.leadUserId !== teamData.lead_user_id) {
+    if (managerPermission !== "admin") {
+      return { error: "Only admins can change team leaders." };
+    }
+
+    const leadMembership = await adminDb.collection("memberships").doc(`${input.organizationId}_${input.leadUserId}`).get();
+    const leadData = leadMembership.data();
+
+    if (!leadMembership.exists || leadData?.organization_id !== input.organizationId || effectivePermission(leadData) === "member") {
+      return { error: "Choose a valid committee lead." };
+    }
+
+    update.lead_user_id = input.leadUserId;
+  }
+
+  if (!Object.keys(update).length) {
+    return { error: null };
+  }
+
+  const now = nowIso();
+  const batch = adminDb.batch();
+  const activityRef = adminDb.collection("activity_logs").doc();
+
+  batch.update(teamRef, update);
+
+  if (typeof update.lead_user_id === "string") {
+    const members = await adminDb.collection("memberships").where("organization_id", "==", input.organizationId).where("team_id", "==", input.teamId).get();
+    members.docs.forEach((doc) => {
+      batch.update(doc.ref, { team_lead_user_id: update.lead_user_id });
+    });
+  }
+
+  batch.set(activityRef, {
+    id: activityRef.id,
+    organization_id: input.organizationId,
+    actor_user_id: auth.user.uid,
+    action: "updated a team",
+    metadata: { team_id: input.teamId, ...update },
+    created_at: now
+  });
+
+  await batch.commit();
+  revalidatePath("/teams");
+  revalidatePath("/members");
+  revalidatePath("/tasks");
+
+  return { error: null };
 }
 
 export async function removeMember(input: {
