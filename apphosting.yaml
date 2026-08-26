@@ -1,0 +1,12 @@
+runConfig:
+  minInstances: 0
+  maxInstances: 20
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 512
+
+env:
+  - variable: HYPED_EDITOR_EMAILS
+    value: harveyjallen1@gmail.com
+    availability:
+      - RUNTIME
