@@ -1,3 +1,5 @@
+import "server-only";
+
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 

@@ -1,10 +1,17 @@
+import "server-only";
+
 import { load } from "cheerio";
 import katex from "katex";
 
 const GITHUB_ORIGIN = "https://github.com";
-const GITHUB_WIKI_ROOT = `${GITHUB_ORIGIN}/Hyp-ed/hyped-2025/wiki`;
+const DEFAULT_WIKI_REPOSITORY = "Hyp-ed/hyped-2027";
+const configuredWikiRepository = process.env.HYPED_GITHUB_WIKI_REPOSITORY?.trim();
+const GITHUB_WIKI_REPOSITORY = configuredWikiRepository && /^Hyp-ed\/hyped-[a-z0-9-]+$/i.test(configuredWikiRepository)
+  ? configuredWikiRepository
+  : DEFAULT_WIKI_REPOSITORY;
+const GITHUB_WIKI_ROOT = `${GITHUB_ORIGIN}/${GITHUB_WIKI_REPOSITORY}/wiki`;
 const GITHUB_WIKI_PAGES = `${GITHUB_WIKI_ROOT}/_pages`;
-const GITHUB_WIKI_SIDEBAR = "https://raw.githubusercontent.com/wiki/Hyp-ed/hyped-2025/_Sidebar.md";
+const GITHUB_WIKI_SIDEBAR = `https://raw.githubusercontent.com/wiki/${GITHUB_WIKI_REPOSITORY}/_Sidebar.md`;
 const WIKI_CACHE_TAG = "hyped-github-wiki";
 const WIKI_REVALIDATE_SECONDS = 60;
 
@@ -515,7 +522,7 @@ function unavailablePage(indexPage: WikiIndexPage): GithubWikiPage {
     navigationTitle: navigationTitleFromSource(indexPage.title, indexPage.id),
     outgoingIds: [],
     parentId: null,
-    summary: "The GitHub Wiki is temporarily unavailable inside SocOS.",
+    summary: "The GitHub Wiki is temporarily unavailable on this site.",
     text: `${title} GitHub Wiki temporarily unavailable`,
     title,
     updatedAt: indexPage.updatedAt,
@@ -599,6 +606,6 @@ function slugifyHeading(value: string) {
 function githubHeaders() {
   return {
     Accept: "text/html",
-    "User-Agent": "SocOS-HYPED-Wiki",
+    "User-Agent": "HYPED-Web-Wiki",
   };
 }

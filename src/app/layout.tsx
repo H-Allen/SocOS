@@ -1,22 +1,7 @@
 import type { Metadata } from "next";
-import { Libre_Baskerville, Raleway } from "next/font/google";
 import "katex/dist/katex.min.css";
 
 import "./globals.css";
-
-const bodyFont = Raleway({
-  display: "swap",
-  subsets: ["latin"],
-  variable: "--font-body",
-  weight: "variable",
-});
-
-const displayFont = Libre_Baskerville({
-  display: "swap",
-  subsets: ["latin"],
-  variable: "--font-display",
-  weight: "variable",
-});
 
 export const metadata: Metadata = {
   title: {
@@ -30,7 +15,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html className={`${bodyFont.variable} ${displayFont.variable}`} lang="en">
+    <html lang="en">
       <body>{children}</body>
     </html>
   );

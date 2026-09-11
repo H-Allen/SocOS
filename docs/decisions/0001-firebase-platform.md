@@ -9,20 +9,19 @@ Firebase App Hosting remains the deployment target. Firestore and Storage may
 be used by the Next.js server to read already-published HYPED content and
 images.
 
-Firebase Authentication, browser SDK access, memberships, invitations,
-private workspaces, Firestore mutations and Storage uploads are outside the
-current product.
+Firebase Authentication and the browser SDK are used only for approved editors
+changing public page-cover images. Memberships, invitations, private
+workspaces and general-purpose content editing remain outside the product.
 
 The GitHub Wiki repository is the source of truth for technical documentation.
 The application is its public reader and navigation layer.
 
 ## Consequences
 
-- The public site has no account or permission system to operate.
-- A Firebase outage does not remove the core public pages because they have
-  built-in fallback content.
-- Non-Wiki content must currently be changed in Firebase or code, not through
-  an in-app editor.
+- Public visitors do not need an account.
+- A Firebase outage leaves the homepage, onboarding guide and Wiki reader
+  usable. Team and people pages show honest empty states.
+- Non-Wiki content must be changed in Firebase or code. The only in-app edit is
+  an authenticated page-cover upload.
 - The architecture can be reconsidered only when real committee workflow
   proves that another editing system is necessary.
-

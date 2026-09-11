@@ -1,7 +1,8 @@
-import { Timestamp } from "firebase-admin/firestore";
+import "server-only";
+
 import { z } from "zod";
 
-import { HYPED_SOCIETY_ID, hypedPublicPeople } from "@/domain/hyped";
+import { HYPED_SOCIETY_ID } from "@/domain/hyped";
 import { publicProfileContentSchema, type PublicProfileView } from "@/domain/public-profiles";
 import { getAdminFirestore } from "@/lib/firebase/admin";
 
@@ -12,33 +13,36 @@ const profileDocumentSchema = z.object({
   visibility: z.enum(["published", "hidden"]),
 });
 
-export async function listPublicProfiles(societyId: string): Promise<PublicProfileView[]> {
+export async function listPublicProfiles(): Promise<PublicProfileView[]> {
   try {
-    const snapshot = await getAdminFirestore().collection(`societies/${societyId}/publicProfiles`).get();
+    const snapshot = await getAdminFirestore().collection(`societies/${HYPED_SOCIETY_ID}/publicProfiles`).get();
     const profiles = snapshot.docs.flatMap((document) => {
       const profile = toView(document.id, document.data());
       return profile ? [profile] : [];
     }).sort((left, right) => left.order - right.order || left.displayName.localeCompare(right.displayName));
     if (profiles.length) return profiles;
   } catch {
-    // The public HYPED directory has a built-in fallback so the site stays useful without Firebase.
+    // An empty directory is safer than publishing unverified personal data.
   }
-  return societyId === HYPED_SOCIETY_ID ? hypedPublicPeople : [];
+  return [];
 }
 
 function toView(id: string, raw: unknown): PublicProfileView | null {
-  const parsed = profileDocumentSchema.parse(raw);
+  const result = profileDocumentSchema.safeParse(raw);
+  if (!result.success) return null;
+  const parsed = result.data;
   if (!parsed.published || parsed.visibility !== "published") return null;
-  const timestamps = raw as { publishedAt?: unknown };
-  const publishedAt = timestamps.publishedAt instanceof Timestamp ? timestamps.publishedAt.toDate().toISOString() : null;
+  const profile = parsed.published;
   return {
-    ...parsed.published,
-    hasUnpublishedChanges: false,
+    bio: profile.bio,
+    displayName: profile.displayName,
+    expertise: profile.expertise,
     id,
-    publishedAt,
-    publishedRevision: parsed.published.revision,
-    revision: parsed.published.revision,
-    updatedAt: publishedAt,
-    visibility: "published",
+    order: profile.order,
+    photoURL: profile.photoURL,
+    responsibilities: profile.responsibilities,
+    role: profile.role,
+    roleTitle: profile.roleTitle,
+    teamIds: profile.teamIds,
   };
 }

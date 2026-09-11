@@ -13,20 +13,22 @@ describe("public profiles", () => {
 
   it("validates the public profile shape used by the directory", () => {
     const view = publicProfileViewSchema.parse({
-      ...content(),
-      hasUnpublishedChanges: false,
+      bio: "I work on pod software.",
+      displayName: "Avery Example",
+      expertise: ["C++"],
       id: "avery",
-      publishedAt: null,
-      publishedRevision: 1,
-      revision: 1,
-      updatedAt: null,
-      visibility: "published",
+      order: 0,
+      photoURL: null,
+      responsibilities: ["Telemetry"],
+      role: "teamLead",
+      roleTitle: "Software Team Lead",
+      teamIds: ["Software"],
     });
     expect(view).toMatchObject({
       displayName: "Avery Example",
-      visibility: "published",
       id: "avery",
     });
+    expect(view).not.toHaveProperty("consentConfirmed");
   });
 });
 

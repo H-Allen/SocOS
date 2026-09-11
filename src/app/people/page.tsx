@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 
 import { PublicPeoplePage } from "@/components/society/public-people-page";
 import { SocietyShell } from "@/components/society/society-shell";
-import { HYPED_SOCIETY_ID } from "@/domain/hyped";
 import { publicMediaUrl } from "@/domain/site-banners";
 import { listPublicProfiles } from "@/lib/firebase/public-profiles.server";
 import { getCurrentEditor } from "@/lib/firebase/editor-auth.server";
@@ -14,11 +13,10 @@ export const metadata: Metadata = { title: "People · HYPED" };
 type PeoplePageProps = { searchParams: Promise<{ member?: string | string[] }> };
 
 export default async function PeoplePage({ searchParams }: PeoplePageProps) {
-  const context = await getHypedPageContext();
   const [{ wiki }, query, profiles, bannerSettings, editor] = await Promise.all([
-    Promise.resolve(context),
+    getHypedPageContext(),
     searchParams,
-    listPublicProfiles(HYPED_SOCIETY_ID),
+    listPublicProfiles(),
     getSiteBannerSettings(),
     getCurrentEditor(),
   ]);

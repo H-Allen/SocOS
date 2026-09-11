@@ -4,16 +4,17 @@ The public home for HYPED at the University of Edinburgh.
 
 The application has five routes:
 
-- `/` — homepage and current announcements
+- `/` — homepage and member resources
 - `/start` — new-member route; progress stays in the visitor's browser
 - `/teams` — how HYPED's teams fit together
 - `/people` — public people directory
-- `/wiki` — a styled reader for the HYPED 2027 GitHub Wiki
+- `/wiki` — a reader for the configured HYPED GitHub Wiki
 
-There are no public SocOS accounts, memberships, invitations or private workspaces.
-Editing the technical Wiki happens on GitHub. Firebase may
-provide already-published homepage, onboarding, team, people and image content.
-Every public page has a built-in HYPED fallback if Firebase is empty or offline.
+There are no visitor accounts, memberships, invitations or private workspaces.
+Editing the technical Wiki happens on GitHub. Firebase may provide
+already-published homepage, onboarding, team, people and image content. The
+homepage and onboarding guide have factual built-in content. Team and people
+pages remain empty until current, consented data is published.
 
 Approved committee Google accounts can sign in from the sidebar. They receive a
 small `Change cover` control directly on each page banner; there is no separate
@@ -28,9 +29,10 @@ npm run dev
 
 Open <http://localhost:3000>.
 
-The site works without Firebase. To read an existing Firebase project, copy
-`.env.example` to `.env.local` and provide the server-side project and bucket
-values described in `docs/FIREBASE_SETUP.md`.
+The site works without Firebase. By default the Wiki reader uses
+`Hyp-ed/hyped-2025`; set `HYPED_GITHUB_WIKI_REPOSITORY` to change it. To read an
+existing Firebase project, copy `.env.example` to `.env.local` and provide the
+server-side project and bucket values described in `docs/FIREBASE_SETUP.md`.
 
 ## Verify
 

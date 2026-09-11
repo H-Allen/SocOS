@@ -61,7 +61,7 @@ export function OnboardingJourney({ bannerImageUrl, bannerPosition, canEdit, gui
   }
 
   return (
-    <div className={styles.onboardingPage}>
+    <div>
       <SocietyDocumentToolbar
         actions={completedIds.length ? <button onClick={resetProgress} type="button">Reset progress</button> : undefined}
         label="Start here"
@@ -73,14 +73,13 @@ export function OnboardingJourney({ bannerImageUrl, bannerPosition, canEdit, gui
         canEdit={canEdit}
         imageUrl={bannerImageUrl}
         positionY={bannerPosition}
-        eyebrow="New member route"
-        icon="👋"
-        label="YOUR FIRST FORTNIGHT / FIND YOUR FEET"
+        eyebrow="New member checklist"
+        label="Getting started"
         summary={guide.introduction}
         title={guide.title}
         tone="start"
       >
-        <div className={styles.onboardingOutcome}><span>🏁</span><div><small>Where this is heading</small><strong>{guide.outcome}</strong></div></div>
+        <div className={styles.onboardingOutcome}><div><small>Outcome</small><strong>{guide.outcome}</strong></div></div>
       </SocietyDocumentHeader>
 
       <div className={styles.onboardingDocumentContent}>
@@ -131,6 +130,8 @@ function DestinationLink({ destination }: { destination: OnboardingDestination }
     ? "/"
     : destination.kind === "people"
       ? "/people"
+      : destination.kind === "teams"
+        ? "/teams"
       : destination.kind === "wiki"
         ? `/wiki?page=${encodeURIComponent(destination.pageId)}`
         : destination.url;

@@ -1,7 +1,9 @@
-import { Timestamp } from "firebase-admin/firestore";
+import "server-only";
+
 import { z } from "zod";
 
-import { createDefaultTeams, teamContentSchema, type TeamView } from "@/domain/teams";
+import { HYPED_SOCIETY_ID } from "@/domain/hyped";
+import { teamContentSchema, type TeamView } from "@/domain/teams";
 import { getAdminFirestore } from "@/lib/firebase/admin";
 
 const storedTeamSchema = teamContentSchema.extend({
@@ -9,28 +11,35 @@ const storedTeamSchema = teamContentSchema.extend({
   updatedBy: z.string().min(1),
 });
 
-export async function listTeams(societyId: string, societyName: string): Promise<TeamView[]> {
-  let stored: TeamView[] = [];
+export async function listTeams(): Promise<TeamView[]> {
   try {
-    const snapshot = await getAdminFirestore().collection(`societies/${societyId}/teams`).get();
-    stored = snapshot.docs.map((document) => toView(document.id, document.data()));
+    const snapshot = await getAdminFirestore().collection(`societies/${HYPED_SOCIETY_ID}/teams`).get();
+    return snapshot.docs
+      .flatMap((document) => {
+        const team = toView(document.id, document.data());
+        return team ? [team] : [];
+      })
+      .sort((left, right) => left.order - right.order || left.name.localeCompare(right.name));
   } catch {
-    // Built-in starter teams keep the public site useful without Firebase.
+    return [];
   }
-  const storedById = new Map(stored.map((team) => [team.id, team]));
-  const defaults = createDefaultTeams(societyName).map((team) => {
-    const id = teamId(team.name);
-    return storedById.get(id) ?? { ...team, id, revision: 0, updatedAt: null, updatedBy: null };
-  });
-  const defaultIds = new Set(defaults.map((team) => team.id));
-  return [...defaults, ...stored.filter((team) => !defaultIds.has(team.id))]
-    .sort((left, right) => left.order - right.order || left.name.localeCompare(right.name));
 }
 
-function toView(id: string, raw: unknown): TeamView {
-  const parsed = storedTeamSchema.parse(raw);
-  const updatedAt = (raw as { updatedAt?: unknown }).updatedAt;
-  return { ...parsed, id, updatedAt: updatedAt instanceof Timestamp ? updatedAt.toDate().toISOString() : null };
+function toView(id: string, raw: unknown): TeamView | null {
+  const result = storedTeamSchema.safeParse(raw);
+  if (!result.success) return null;
+  const team = result.data;
+  return {
+    connections: team.connections,
+    currentFocus: team.currentFocus,
+    icon: team.icon,
+    id,
+    leadUserId: team.leadUserId,
+    name: team.name,
+    order: team.order,
+    owns: team.owns,
+    purpose: team.purpose,
+    summary: team.summary,
+    wikiPageId: team.wikiPageId,
+  };
 }
-
-function teamId(name: string) { return name.toLocaleLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }

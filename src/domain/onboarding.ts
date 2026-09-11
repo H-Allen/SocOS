@@ -1,11 +1,14 @@
 import { z } from "zod";
 
+import { HYPED_SOCIETY_NAME } from "@/domain/hyped";
+
 export const onboardingStepIdSchema = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,79}$/);
 export const onboardingPhaseSchema = z.enum(["firstDay", "firstWeek", "firstFortnight"]);
 
 export const onboardingDestinationSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("home"), label: z.string().trim().min(1).max(40) }),
   z.object({ kind: z.literal("people"), label: z.string().trim().min(1).max(40) }),
+  z.object({ kind: z.literal("teams"), label: z.string().trim().min(1).max(40) }),
   z.object({
     kind: z.literal("wiki"),
     label: z.string().trim().min(1).max(40),
@@ -14,7 +17,7 @@ export const onboardingDestinationSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("external"),
     label: z.string().trim().min(1).max(40),
-    url: z.url().refine((value) => ["https:", "http:"].includes(new URL(value).protocol)),
+    url: z.url().refine((value) => new URL(value).protocol === "https:"),
   }),
 ]);
 
@@ -48,15 +51,9 @@ export const onboardingGuideContentSchema = z.object({
   }),
 });
 
-export const onboardingGuideViewSchema = onboardingGuideContentSchema.extend({
-  revision: z.number().int().min(0),
-  updatedAt: z.iso.datetime().nullable(),
-  updatedBy: z.string().nullable(),
-});
-
 export type OnboardingDestination = z.infer<typeof onboardingDestinationSchema>;
 export type OnboardingGuideContent = z.infer<typeof onboardingGuideContentSchema>;
-export type OnboardingGuideView = z.infer<typeof onboardingGuideViewSchema>;
+export type OnboardingGuideView = OnboardingGuideContent;
 export type OnboardingPhase = z.infer<typeof onboardingPhaseSchema>;
 export type OnboardingStep = z.infer<typeof onboardingStepSchema>;
 
@@ -66,19 +63,17 @@ export const onboardingPhaseLabels: Record<OnboardingPhase, string> = {
   firstFortnight: "Your first fortnight",
 };
 
-export function createDefaultOnboardingGuide(societyName: string): OnboardingGuideContent {
+export function createDefaultOnboardingGuide(): OnboardingGuideContent {
   return onboardingGuideContentSchema.parse({
-    title: `Find your place in ${societyName}`,
-    introduction: `${societyName} is more than a list of tasks. This short route gives you the context, people and first contribution you need to feel part of the society.`,
-    outcome: "By the end, you should understand the shared goal, know who to ask for help and have one useful piece of work underway.",
+    title: `Getting started with ${HYPED_SOCIETY_NAME}`,
+    introduction: "A short checklist for understanding the project, finding your team and agreeing your first piece of work. Progress is stored only in this browser.",
+    outcome: "You understand the project, know where its documentation lives and have agreed a first task with your team.",
     steps: [
-      step("understand-the-mission", "Understand what we are building", "Start with the purpose, the project and the reason every team is here.", "Context makes even a small starter task feel useful.", "firstDay", 8, true, { kind: "wiki", label: "Open the technical Wiki", pageId: "Home" }),
-      step("meet-the-people", "Know who to ask", "Find your team lead and two people outside your own team.", "Knowing names early makes asking for help much easier.", "firstDay", 10, true, { kind: "people", label: "Open People", }),
-      step("join-the-conversation", "Join the conversation", "Get into the society Discord and introduce yourself to your team.", "The hub gives context; conversation is where the society becomes friendly.", "firstDay", 5, true, { kind: "external", label: "Open Discord", url: "https://discord.com" }),
-      step("see-the-whole-system", "See the whole system", "Learn how the teams connect and where your work fits into the final result.", "A software, mechanical or outreach task only makes sense as part of the same system.", "firstWeek", 12, true, { kind: "wiki", label: "Open the system overview", pageId: "general_overview" }),
-      step("learn-your-team", "Learn how your team works", "Read your team’s technical pages, find its tools and understand what it owns.", "Good onboarding should not rely on somebody remembering every setup detail.", "firstWeek", 20, true, { kind: "wiki", label: "Browse technical sections", pageId: "Home" }),
-      step("shape-your-profile", "Learn who can help", "Find the people who own the areas you will work with.", "Knowing who to ask makes it much easier to get unstuck.", "firstWeek", 5, false, { kind: "people", label: "Open People" }),
-      step("start-something-useful", "Start one useful contribution", "Agree a small, real first task with your lead and understand who benefits from it.", "Finishing something meaningful is the quickest route to confidence and belonging.", "firstFortnight", 30, true, { kind: "people", label: "Find your team lead" }),
+      step("read-the-overview", "Read the project overview", "Start with the Wiki home page and follow the links relevant to your area.", "This gives you the vocabulary and context used in team discussions.", "firstDay", 10, true, { kind: "wiki", label: "Open the technical Wiki", pageId: "Home" }),
+      step("choose-a-team", "Identify your team", "Check the current team list and note what the team owns.", "Clear ownership makes it easier to find the right work and the right reviewer.", "firstDay", 5, true, { kind: "teams", label: "View teams" }),
+      step("find-your-contact", "Find your team contact", "Use the published directory to find the team lead or another named contact.", "You need a real person to confirm access, priorities and safety requirements.", "firstWeek", 5, true, { kind: "people", label: "Open the directory" }),
+      step("read-team-documentation", "Read your team documentation", "Review the setup, architecture and operating notes linked from your team page.", "The Wiki is the source of truth for technical procedures.", "firstWeek", 20, true, { kind: "wiki", label: "Browse the Wiki", pageId: "Home" }),
+      step("agree-first-task", "Agree your first task", "Ask your team contact for a small task with a clear result and reviewer.", "A scoped task is easier to complete and gives the team something it can verify.", "firstFortnight", 20, true, { kind: "people", label: "Find a contact" }),
     ],
   });
 }

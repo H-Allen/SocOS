@@ -44,15 +44,6 @@ export function HomeIcon(props: IconProps) {
   );
 }
 
-export function MegaphoneIcon(props: IconProps) {
-  return (
-    <IconBase {...props}>
-      <path d="m3 11 16-6v14L3 13v-2Z" />
-      <path d="m11.6 16.2-1.3 4.3H7l-1.5-6" />
-    </IconBase>
-  );
-}
-
 export function PeopleIcon(props: IconProps) {
   return (
     <IconBase {...props}>

@@ -26,7 +26,7 @@ export function GithubWikiPage({ bannerImageUrl, bannerPosition, canEdit, naviga
     : status === "partial" ? "GitHub · partial sync" : "GitHub unavailable";
 
   return (
-    <article className={`${styles.githubWikiPage} ${styles.wikiWorkspace}`}>
+    <article>
       <div className={styles.societyDocumentToolbar}>
         <div className={styles.societyDocumentTrail}>
           <span className={styles.wikiBreadcrumbs}>
@@ -52,11 +52,10 @@ export function GithubWikiPage({ bannerImageUrl, bannerPosition, canEdit, naviga
         </div>
       </div>
 
-      <header className={styles.societyDocumentHeader}>
+      <header>
         <SocietyDocumentCover bannerPage="wiki" canEdit={canEdit} imageUrl={bannerImageUrl} label="HYPED / TECHNICAL WIKI" positionY={bannerPosition} tone="wiki" />
         <div className={styles.societyDocumentIdentity}>
-          <div className={styles.societyDocumentIcon}>{page.icon}</div>
-          <span className={styles.societyDocumentEyebrow}>HYPED 2027 KNOWLEDGE BASE</span>
+          <span className={styles.societyDocumentEyebrow}>Technical documentation</span>
           <h1>{page.title}</h1>
           <div className={styles.githubWikiMeta}>
             <span>Source <strong>GitHub Wiki</strong></span>
@@ -68,10 +67,10 @@ export function GithubWikiPage({ bannerImageUrl, bannerPosition, canEdit, naviga
 
       {page.id === "Home" && (
         <aside className={styles.githubWikiWelcome}>
-          <span>NEW TO HYPED?</span>
+          <span>New member?</span>
           <div>
-            <strong>Start with the people and the purpose, then get technical.</strong>
-            <p>The member route covers how the team works, where everything lives and what to do first.</p>
+            <strong>Use the getting-started checklist before diving into the detail.</strong>
+            <p>It points you to the project overview, team information and your first contact.</p>
           </div>
           <Link href="/start">Open the new member route →</Link>
         </aside>

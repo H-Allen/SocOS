@@ -26,6 +26,3 @@ service-account*.json
 # OS and editor files
 .DS_Store
 *.swp
-
-# Test wikis
-hyped*

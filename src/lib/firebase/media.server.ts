@@ -1,3 +1,5 @@
+import "server-only";
+
 import { firebaseStorageAvailable, getAdminStorage } from "@/lib/firebase/admin";
 import { deleteLocalSiteImage, getLocalSiteImage, saveLocalSiteImage } from "@/lib/local-banners.server";
 

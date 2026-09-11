@@ -1,7 +1,7 @@
 # Optional Firebase content source
 
-Firebase is not required to run the HYPED website. The application always has
-built-in public fallback content.
+Firebase is not required to run the HYPED website. The homepage and onboarding
+guide have built-in content; teams and people are shown only when published.
 
 When configured, the server reads published content from these locations:
 

@@ -1,7 +1,9 @@
-import { Timestamp } from "firebase-admin/firestore";
+import "server-only";
+
 import { z } from "zod";
 
 import { homepageContentSchema, type HomepageContent } from "@/domain/homepage";
+import { HYPED_SOCIETY_ID } from "@/domain/hyped";
 import { getAdminFirestore } from "@/lib/firebase/admin";
 
 const homepageDocumentSchema = z.object({
@@ -11,20 +13,9 @@ const homepageDocumentSchema = z.object({
   updatedBy: z.string().min(1),
 });
 
-export type HomepageDocument = {
-  content: HomepageContent;
-  revision: number;
-  updatedAt: string | null;
-};
-
-export async function getHomepage(societyId: string, version: "published"): Promise<HomepageDocument | null> {
-  const snapshot = await getAdminFirestore().doc(`societies/${societyId}/homepages/${version}`).get();
+export async function getPublishedHomepage(): Promise<HomepageContent | null> {
+  const snapshot = await getAdminFirestore().doc(`societies/${HYPED_SOCIETY_ID}/homepages/published`).get();
   if (!snapshot.exists) return null;
   const parsed = homepageDocumentSchema.parse(snapshot.data());
-  const updatedAt = snapshot.data()?.updatedAt;
-  return {
-    content: parsed.content,
-    revision: parsed.revision,
-    updatedAt: updatedAt instanceof Timestamp ? updatedAt.toDate().toISOString() : null,
-  };
+  return parsed.content;
 }

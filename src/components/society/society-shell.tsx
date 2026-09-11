@@ -47,16 +47,16 @@ export function SocietyShell({
   const visibleWikiLinks = wikiLinks.filter((item) => item.ancestorIds.every((ancestorId) => !isCollapsed(ancestorId)));
 
   return (
-    <div className={`${styles.appShell} ${styles.workshop}`} data-society-shell>
+    <div className={styles.appShell} data-society-shell>
+      <a className={styles.skipLink} href="#main-content">Skip to content</a>
       <aside className={styles.sidebar}>
         <div className={styles.societySwitcher}>
           <HypedMark className={styles.societyLogo} />
-          <span className={styles.chevron} />
         </div>
 
-        <button aria-label="Search HYPED" className={styles.searchButton} onClick={openSearch} type="button"><SearchIcon /><span>Search</span><kbd>⌘ K</kbd></button>
+        <button aria-label="Search HYPED" className={styles.searchButton} onClick={openSearch} type="button"><SearchIcon /><span>Search</span><kbd>K</kbd></button>
 
-        <nav aria-label="Society" className={styles.mainNav}>
+        <nav aria-label="Main navigation" className={styles.mainNav}>
           {mainLinks.map(({ href, icon: Icon, label }) => {
             const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
             return <Link className={active ? styles.navActive : ""} href={href} key={href}><Icon />{label}</Link>;
@@ -64,7 +64,7 @@ export function SocietyShell({
         </nav>
 
         <div className={`${styles.sidebarSection} ${styles.sidebarWikiSection}`}>
-          <div className={styles.sidebarLabel}><span>Technical Wiki</span><small>GitHub synced</small></div>
+          <div className={styles.sidebarLabel}><span>Technical Wiki</span><small>GitHub</small></div>
           <nav aria-label="Technical Wiki" className={styles.sidebarWikiList}>
             {visibleWikiLinks.map((item) => (
               <div className={styles.sidebarWikiRow} data-active={activeWikiPageId === item.pageId} data-depth={item.depth} data-kind={item.kind} key={item.id} style={{ marginLeft: item.depth * 16 }}>
@@ -91,9 +91,8 @@ export function SocietyShell({
 
         <div className={styles.sidebarBottom}>
           <EditorAuthControl email={editorEmail} />
-          <a href="https://discord.com" rel="noreferrer" target="_blank">Discord <ExternalIcon /></a>
+          <a href="https://hyp-ed.com" rel="noreferrer" target="_blank">Public website <ExternalIcon /></a>
           <a href="https://github.com/Hyp-ed" rel="noreferrer" target="_blank">GitHub <ExternalIcon /></a>
-          <a href="https://drive.google.com" rel="noreferrer" target="_blank">Google Drive <ExternalIcon /></a>
         </div>
       </aside>
 
@@ -105,7 +104,7 @@ export function SocietyShell({
         </nav>
       </div>
 
-      <main className={styles.main}>{children}</main>
+      <main className={styles.main} id="main-content">{children}</main>
       <SocietySearch onClose={closeSearch} onOpen={openSearch} open={searchOpen} />
     </div>
   );

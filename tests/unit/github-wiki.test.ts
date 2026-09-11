@@ -162,13 +162,13 @@ describe("GitHub Wiki adapter", () => {
 
   it("uses _Sidebar.md labels, directories, nesting and order for navigation", () => {
     const sidebar = parseGithubWikiSidebar(`
-* [Home](https://github.com/Hyp-ed/hyped-2027/wiki)
+* [Home](https://github.com/Hyp-ed/hyped-2026/wiki)
 * Technical Guides
   * \`git\`
-    * [Using \`git\` and GitHub](https://github.com/Hyp-ed/hyped-2027/wiki/Using-git-and-GitHub)
+    * [Using \`git\` and GitHub](https://github.com/Hyp-ed/hyped-2026/wiki/Using-git-and-GitHub)
   * Rust
-    * [Embassy](https://github.com/Hyp-ed/hyped-2027/wiki/Embassy)
-* [Glossary](https://github.com/Hyp-ed/hyped-2027/wiki/Glossary)
+    * [Embassy](https://github.com/Hyp-ed/hyped-2026/wiki/Embassy)
+* [Glossary](https://github.com/Hyp-ed/hyped-2026/wiki/Glossary)
     `);
 
     expect(sidebar.map(({ kind, pageId, title }) => ({ kind, pageId, title }))).toEqual([
@@ -221,7 +221,7 @@ describe("GitHub Wiki adapter", () => {
 function wikiPage(id: string, outgoingIds: string[]): GithubWikiPage {
   return {
     childrenIds: [],
-    githubUrl: `https://github.com/Hyp-ed/hyped-2027/wiki/${id}`,
+    githubUrl: `https://github.com/Hyp-ed/hyped-2026/wiki/${id}`,
     headings: [],
     html: "",
     icon: "·",

@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 
 import { SocietyShell } from "@/components/society/society-shell";
 import { TeamsPage } from "@/components/society/teams-page";
-import { HYPED_SOCIETY_ID, HYPED_SOCIETY_NAME } from "@/domain/hyped";
 import { publicMediaUrl } from "@/domain/site-banners";
 import { listTeams } from "@/lib/firebase/teams.server";
 import { getCurrentEditor } from "@/lib/firebase/editor-auth.server";
@@ -15,12 +14,11 @@ export const metadata: Metadata = { title: "Teams · HYPED" };
 type TeamsRouteProps = { searchParams: Promise<{ team?: string | string[] }> };
 
 export default async function TeamsRoute({ searchParams }: TeamsRouteProps) {
-  const context = await getHypedPageContext();
   const [{ wiki }, query, teams, profiles, bannerSettings, editor] = await Promise.all([
-    Promise.resolve(context),
+    getHypedPageContext(),
     searchParams,
-    listTeams(HYPED_SOCIETY_ID, HYPED_SOCIETY_NAME),
-    listPublicProfiles(HYPED_SOCIETY_ID),
+    listTeams(),
+    listPublicProfiles(),
     getSiteBannerSettings(),
     getCurrentEditor(),
   ]);

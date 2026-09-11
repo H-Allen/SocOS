@@ -1,6 +1,8 @@
-import { Timestamp } from "firebase-admin/firestore";
+import "server-only";
+
 import { z } from "zod";
 
+import { HYPED_SOCIETY_ID } from "@/domain/hyped";
 import { createDefaultOnboardingGuide, onboardingGuideContentSchema, type OnboardingGuideView } from "@/domain/onboarding";
 import { getAdminFirestore } from "@/lib/firebase/admin";
 
@@ -10,23 +12,17 @@ const guideDocumentSchema = z.object({
   updatedBy: z.string().min(1),
 });
 
-export async function getOnboardingGuide(societyId: string, societyName: string): Promise<OnboardingGuideView> {
+export async function getOnboardingGuide(): Promise<OnboardingGuideView> {
   try {
-    const snapshot = await getAdminFirestore().doc(`societies/${societyId}/onboarding/guide`).get();
-    if (!snapshot.exists) return defaultGuide(societyName);
+    const snapshot = await getAdminFirestore().doc(`societies/${HYPED_SOCIETY_ID}/onboarding/guide`).get();
+    if (!snapshot.exists) return defaultGuide();
     const parsed = guideDocumentSchema.parse(snapshot.data());
-    const updatedAt = snapshot.data()?.updatedAt;
-    return {
-      ...parsed.guide,
-      revision: parsed.revision,
-      updatedAt: updatedAt instanceof Timestamp ? updatedAt.toDate().toISOString() : null,
-      updatedBy: parsed.updatedBy,
-    };
+    return parsed.guide;
   } catch {
-    return defaultGuide(societyName);
+    return defaultGuide();
   }
 }
 
-function defaultGuide(societyName: string): OnboardingGuideView {
-  return { ...createDefaultOnboardingGuide(societyName), revision: 0, updatedAt: null, updatedBy: null };
+function defaultGuide(): OnboardingGuideView {
+  return createDefaultOnboardingGuide();
 }

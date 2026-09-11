@@ -16,14 +16,8 @@ export const publicProfileContentSchema = z.object({
   teamIds: z.array(listItem).max(16),
 }).strict();
 
-export const publicProfileViewSchema = publicProfileContentSchema.extend({
-  hasUnpublishedChanges: z.boolean(),
+export const publicProfileViewSchema = publicProfileContentSchema.omit({ consentConfirmed: true }).extend({
   id: z.string().min(1).max(128),
-  publishedAt: z.iso.datetime().nullable(),
-  publishedRevision: z.number().int().min(1).nullable(),
-  revision: z.number().int().min(1),
-  updatedAt: z.iso.datetime().nullable(),
-  visibility: z.enum(["published", "hidden"]),
 });
 
 export type PublicProfileContent = z.infer<typeof publicProfileContentSchema>;

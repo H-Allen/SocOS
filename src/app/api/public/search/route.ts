@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 
-import { HYPED_SOCIETY_ID, HYPED_SOCIETY_NAME } from "@/domain/hyped";
 import { rankSocietySearchDocuments, societySearchQuerySchema, type SocietySearchDocument } from "@/domain/search";
 import { getOnboardingGuide } from "@/lib/firebase/onboarding.server";
 import { listPublicProfiles } from "@/lib/firebase/public-profiles.server";
@@ -14,9 +13,9 @@ export async function GET(request: Request) {
   if (!query.success) return NextResponse.json({ error: "Enter at least two characters" }, { status: 400 });
   const [wiki, onboarding, teams, profiles] = await Promise.all([
     getGithubWikiSnapshot(),
-    getOnboardingGuide(HYPED_SOCIETY_ID, HYPED_SOCIETY_NAME).catch(() => null),
-    listTeams(HYPED_SOCIETY_ID, HYPED_SOCIETY_NAME).catch(() => []),
-    listPublicProfiles(HYPED_SOCIETY_ID),
+    getOnboardingGuide().catch(() => null),
+    listTeams().catch(() => []),
+    listPublicProfiles(),
   ]);
   const documents: SocietySearchDocument[] = [
     ...wiki.pages.map((page) => ({ body: page.text, excerpt: page.summary, href: `/wiki?page=${encodeURIComponent(page.id)}`, icon: page.icon, id: `wiki:${page.id}`, keywords: page.outgoingIds, kind: "wiki" as const, title: page.navigationTitle })),

@@ -1,3 +1,5 @@
+import "server-only";
+
 import { FieldValue } from "firebase-admin/firestore";
 import { z } from "zod";
 

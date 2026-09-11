@@ -52,14 +52,14 @@ export function PublicPeoplePage({ bannerImageUrl, bannerPosition, canEdit, init
   }
 
   return (
-    <div className={styles.peoplePage}>
-      <SocietyDocumentToolbar label="People" status={<small>{profiles.length} profiles</small>} />
-      <SocietyDocumentHeader bannerPage="people" canEdit={canEdit} eyebrow="Society directory" icon="👥" imageUrl={bannerImageUrl} label="WHO KNOWS WHAT / WHO TO ASK" positionY={bannerPosition} summary="Find who knows what, what each team owns and who to ask." title="People" tone="people">
-        <div aria-label="Directory summary" className={styles.peopleStats}><span><b>{profiles.length}</b>profiles</span><span><b>{teamCount}</b>teams</span><span><b>{expertiseCount}</b>skills</span></div>
+    <div>
+      <SocietyDocumentToolbar label="People" status={<small>{profiles.length ? `${profiles.length} profiles` : "No profiles published"}</small>} />
+      <SocietyDocumentHeader bannerPage="people" canEdit={canEdit} eyebrow="Directory" imageUrl={bannerImageUrl} label="Published member profiles" positionY={bannerPosition} summary="Find a published team contact by name, role or area of expertise." title="People" tone="people">
+        {profiles.length > 0 && <div aria-label="Directory summary" className={styles.peopleStats}><span><b>{profiles.length}</b>profiles</span><span><b>{teamCount}</b>teams</span><span><b>{expertiseCount}</b>skills</span></div>}
       </SocietyDocumentHeader>
 
       <div className={styles.peopleDocumentContent}>
-        <div className={styles.peopleFilters}>
+        {profiles.length > 0 ? <><div className={styles.peopleFilters}>
           {filters.map((item) => <button className={filter === item.id ? styles.filterActive : undefined} key={item.id} onClick={() => setFilter(item.id)} type="button">{item.label} <span>{item.count}</span></button>)}
           <input aria-label="Find a person" onChange={(event) => setSearch(event.target.value)} placeholder="Name, team or skill…" type="search" value={search} />
         </div>
@@ -76,8 +76,8 @@ export function PublicPeoplePage({ bannerImageUrl, bannerPosition, canEdit, init
                 </button>
               ))}
             </div>
-          ) : <div className={styles.peopleEmpty}><span>⌕</span><strong>{search ? "No one matches that" : "Profiles are being prepared"}</strong><p>{search ? "Try another name, team or skill." : "The committee will add people here soon."}</p></div>}
-        </section>
+          ) : <div className={styles.peopleEmpty}><strong>{search ? "No matching profile" : "No profiles published"}</strong><p>{search ? "Try another name, team or skill." : "This page stays empty until the committee publishes consented member information."}</p></div>}
+        </section></> : <div className={styles.peopleEmpty}><strong>No profiles published</strong><p>This page stays empty until the committee publishes current member information with consent.</p></div>}
         <section className={styles.ownershipSection}><h2>Not sure who owns something?</h2><p>The directory tells you who to ask. The technical Wiki tells you what HYPED already knows.</p><Link href="/wiki">Browse the technical Wiki →</Link></section>
       </div>
 

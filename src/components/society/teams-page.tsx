@@ -34,25 +34,21 @@ export function TeamsPage({ bannerImageUrl, bannerPosition, canEdit, initialTeam
   }
 
   return (
-    <div className={styles.teamsPage}>
-      <SocietyDocumentToolbar actions={<Link href="/people">People</Link>} label="Teams" status={<small>{teams.length} connected</small>} />
+    <div>
+      <SocietyDocumentToolbar actions={<Link href="/people">People</Link>} label="Teams" status={<small>{teams.length ? `${teams.length} teams` : "No teams published"}</small>} />
       <SocietyDocumentHeader
         bannerPage="teams"
         canEdit={canEdit}
         imageUrl={bannerImageUrl}
         positionY={bannerPosition}
-        eyebrow="How the society fits together"
-        icon="🧩"
-        label="THE WHOLE SOCIETY / ONE SYSTEM"
-        summary="See what each part of HYPED owns, who leads it and where the handoffs happen."
+        eyebrow="Organisation"
+        label="Published team information"
+        summary="See what each published team owns, who leads it and where to find its documentation."
         title="Teams"
         tone="teams"
-      >
-        <div className={styles.sharedGoalCard}><small>Shared result</small><strong>European Hyperloop Week</strong><span>Every team shown below contributes to the same pod.</span></div>
-      </SocietyDocumentHeader>
+      />
 
-      <section aria-label="HYPED team map" className={styles.teamMap}>
-        <div className={styles.teamMapRail}><span>MEMBERS</span><b>→</b><span>TEAMS</span><b>→</b><span>ONE POD</span></div>
+      {teams.length ? <section aria-label="HYPED teams" className={styles.teamMap}>
         <div className={styles.teamMapGrid}>
           {teams.map((team) => {
             const lead = team.leadUserId ? personById.get(team.leadUserId) : null;
@@ -65,14 +61,14 @@ export function TeamsPage({ bannerImageUrl, bannerPosition, canEdit, initialTeam
             );
           })}
         </div>
-      </section>
+      </section> : <section className={styles.teamMap}><div className={styles.peopleEmpty}><strong>No teams published</strong><p>This page stays empty until current team information is available.</p></div></section>}
 
       {selected && (
         <section className={styles.teamDetail} id="team-detail">
-          <div className={styles.teamDetailHeading}><div className={styles.teamDetailIcon}>{selected.icon}</div><div><small>TEAM {String(selected.order + 1).padStart(2, "0")}</small><h2>{selected.name}</h2><p>{selected.summary}</p></div></div>
+          <div className={styles.teamDetailHeading}><div><small>Team</small><h2>{selected.name}</h2><p>{selected.summary}</p></div></div>
           <div className={styles.teamDetailGrid}>
-            <div className={styles.teamPurposeBlock}><span>WHY IT EXISTS</span><p>{selected.purpose}</p><div className={styles.teamFocusNote}><small>RIGHT NOW</small><strong>{selected.currentFocus}</strong></div></div>
-            <div className={styles.teamOwnsBlock}><span>THIS TEAM OWNS</span><ul>{selected.owns.map((item) => <li key={item}>{item}</li>)}</ul></div>
+            <div className={styles.teamPurposeBlock}><span>Purpose</span><p>{selected.purpose}</p><div className={styles.teamFocusNote}><small>Current focus</small><strong>{selected.currentFocus}</strong></div></div>
+            <div className={styles.teamOwnsBlock}><span>Responsibilities</span><ul>{selected.owns.map((item) => <li key={item}>{item}</li>)}</ul></div>
           </div>
           <div className={styles.teamPeopleRow}>
             <div>
