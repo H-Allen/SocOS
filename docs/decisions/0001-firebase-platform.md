@@ -1,7 +1,11 @@
 # ADR 0001: Narrow Firebase to an optional public content source
 
 Date: 2026-08-25  
-Status: accepted
+Status: superseded in part on 2026-09-15
+
+Update: the website now presents only the GitHub Wiki. Firebase is limited to
+per-page banner storage and editor authentication. The standalone public
+content readers described below have been removed; stored records are retained.
 
 ## Decision
 

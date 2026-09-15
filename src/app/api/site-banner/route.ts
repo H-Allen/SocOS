@@ -1,9 +1,10 @@
+import { getGithubWikiSnapshot } from "@/lib/github-wiki.server";
 import { randomUUID } from "node:crypto";
 
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 
-import { bannerPageSchema, bannerPositionSchema } from "@/domain/site-banners";
+import { bannerKey, bannerPageSchema, bannerPositionSchema } from "@/domain/site-banners";
 import { getCurrentEditor, requestHasSameOrigin } from "@/lib/firebase/editor-auth.server";
 import { deletePublicSiteImage, savePublicSiteImage } from "@/lib/firebase/media.server";
 import { clearSiteBanner, getSiteBannerSettings, setSiteBanner, setSiteBannerPosition } from "@/lib/firebase/site-banners.server";
@@ -22,15 +23,16 @@ export async function POST(request: Request) {
 
   try {
     const form = await request.formData();
-    const page = bannerPageSchema.parse(form.get("page"));
+    const page = await validWikiPage(form.get("page"));
+    if (!page) return new NextResponse("Unknown Wiki page.", { status: 400 });
     const image = form.get("image");
     if (!(image instanceof File) || image.size === 0) return new NextResponse("Choose an image first.", { status: 400 });
     if (image.size > 6 * 1024 * 1024) return new NextResponse("Choose an image smaller than 6 MB.", { status: 413 });
     const extension = imageTypes[image.type as keyof typeof imageTypes];
     if (!extension) return new NextResponse("Use a JPG, PNG or WebP image.", { status: 415 });
 
-    const previous = (await getSiteBannerSettings()).banners[page];
-    const path = `societies/hyped/public/banners/${page}-${randomUUID()}.${extension}`;
+    const previous = (await getSiteBannerSettings()).banners[bannerKey(page)];
+    const path = `societies/hyped/public/banners/wiki-${randomUUID()}.${extension}`;
     await savePublicSiteImage(path, Buffer.from(await image.arrayBuffer()), image.type);
     await setSiteBanner(page, path);
     await deleteOldBanner(previous);
@@ -47,8 +49,9 @@ export async function DELETE(request: Request) {
 
   try {
     const body = await request.json() as { page?: unknown };
-    const page = bannerPageSchema.parse(body.page);
-    const previous = (await getSiteBannerSettings()).banners[page];
+    const page = await validWikiPage(body.page);
+    if (!page) return new NextResponse("Unknown Wiki page.", { status: 400 });
+    const previous = (await getSiteBannerSettings()).banners[bannerKey(page)];
     await clearSiteBanner(page);
     await deleteOldBanner(previous);
     revalidateSite();
@@ -64,16 +67,24 @@ export async function PATCH(request: Request) {
 
   try {
     const body = await request.json() as { page?: unknown; position?: unknown };
-    const page = bannerPageSchema.parse(body.page);
+    const page = await validWikiPage(body.page);
+    if (!page) return new NextResponse("Unknown Wiki page.", { status: 400 });
     const position = bannerPositionSchema.parse(body.position);
     const settings = await getSiteBannerSettings();
-    if (!settings.banners[page]) return new NextResponse("Add a cover image before repositioning it.", { status: 409 });
+    if (!settings.banners[bannerKey(page)]) return new NextResponse("Add a cover image before repositioning it.", { status: 409 });
     await setSiteBannerPosition(page, position);
     revalidateSite();
     return NextResponse.json({ ok: true });
   } catch {
     return new NextResponse("The cover position could not be saved.", { status: 400 });
   }
+}
+
+async function validWikiPage(value: unknown) {
+  const parsed = bannerPageSchema.safeParse(value);
+  if (!parsed.success) return null;
+  const wiki = await getGithubWikiSnapshot();
+  return wiki.pages.some((page) => page.id === parsed.data) ? parsed.data : null;
 }
 
 async function editRequestError(request: Request) {
@@ -88,5 +99,5 @@ async function deleteOldBanner(path?: string) {
 }
 
 function revalidateSite() {
-  ["/", "/start", "/teams", "/people", "/wiki"].forEach((path) => revalidatePath(path));
+  ["/", "/wiki"].forEach((path) => revalidatePath(path));
 }

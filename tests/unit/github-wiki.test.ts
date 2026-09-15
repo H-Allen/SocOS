@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { indexPageIds, splitWikiPages } from "@/domain/wiki-navigation";
 
 import {
   applyGithubWikiSidebar,
@@ -10,7 +11,11 @@ import {
   type GithubWikiPage,
 } from "@/lib/github-wiki.server";
 
+const repository = vi.hoisted(() => ({ paths: [] as string[], available: true }));
+vi.mock("@/lib/wiki-repository.server", () => ({ getWikiRepositoryPaths: async () => repository }));
+
 describe("GitHub Wiki adapter", () => {
+  beforeEach(() => { repository.paths = []; repository.available = true; });
   afterEach(() => vi.unstubAllGlobals());
 
   it("discovers Wiki pages and keeps Home first", () => {
@@ -71,6 +76,18 @@ describe("GitHub Wiki adapter", () => {
     expect(page.navigationTitle).toBe("General Overview");
     expect(page.summary).toBe("");
     expect(page.html).toContain("Documentations</h1>");
+  });
+
+  it("preserves links to archived Wikis and section fragments", () => {
+    const page = parseGithubWikiPage(`<article class="markdown-body">
+      <a href="https://github.com/Hyp-ed/hyped-2024/wiki/Home">2024 archive</a>
+      <a href="wiki/Setup#installation">Setup</a>
+      <a href="#local-section">This section</a>
+    </article>`, { id: "Home", title: "Home", updatedAt: null });
+    expect(page.html).toContain('href="https://github.com/Hyp-ed/hyped-2024/wiki/Home"');
+    expect(page.html).toContain('href="/wiki?page=Setup#installation"');
+    expect(page.html).toContain('href="#local-section"');
+    expect(page.outgoingIds).toEqual(["Setup"]);
   });
 
   it("renders inline and display LaTeX while leaving code examples unchanged", () => {
@@ -215,6 +232,68 @@ describe("GitHub Wiki adapter", () => {
     expect(snapshot.pages).toHaveLength(1);
     expect(snapshot.pages[0]).toMatchObject({ id: "Home", title: "Home" });
     expect(snapshot.pages[0]?.html).toContain("could not be loaded from GitHub");
+    expect(snapshot.indexNavigation).toEqual([]);
+  });
+
+  it("only promotes Markdown files in the root index directory", () => {
+    expect(indexPageIds([
+      "Home.md", "index/People.md", "index/Getting Started.markdown",
+      "index/resources/Contacts.md", "index/_Sidebar.md", "index/.draft.md",
+      "index/logo.png", "index.md", "boards/index/Other.md", "Index/Case.md",
+    ])).toEqual(["People", "Getting-Started", "Contacts"]);
+    expect(indexPageIds(["index/.gitkeep"])).toEqual([]);
+  });
+
+  it("does not guess between duplicate Wiki filenames", () => {
+    expect(indexPageIds(["Home.md", "index/Home.md", "index/People.md", "teams/people.markdown"])).toEqual([]);
+  });
+
+  it("separates index pages and prunes empty Wiki directories without hiding other pages", () => {
+    const pages = ["Home", "People", "Onboarding", "Board"].map((id) => wikiPage(id, []));
+    const sidebar = parseGithubWikiSidebar("* Main\n  * [People](index/People.md)\n  * [Welcome](Home)\n* Technical\n  * [Board](Board)");
+    const labelled = applyGithubWikiSidebar(pages, sidebar).pages;
+    const split = splitWikiPages(labelled, sidebar, ["index/Home.md", "index/People.md", "index/Onboarding.md", "boards/Board.md"]);
+    expect(split.indexNavigation.map((item) => [item.pageId, item.title])).toEqual([
+      ["Home", "Welcome"], ["People", "People"], ["Onboarding", "Onboarding"],
+    ]);
+    const technical = applyGithubWikiSidebar(split.wikiPages, sidebar).navigation;
+    expect(technical.map((item) => item.title)).toEqual(["Technical", "Board"]);
+    expect(split.indexNavigation.every((item) => item.parentId === null)).toBe(true);
+  });
+
+  it("keeps the Wiki unchanged when the index directory is absent or empty", () => {
+    const pages = [wikiPage("Home", []), wikiPage("People", [])];
+    for (const paths of [[], ["Home.md", "People.md"], ["index/.gitkeep"]]) {
+      expect(splitWikiPages(pages, [], paths)).toEqual({ indexNavigation: [], wikiPages: pages });
+    }
+  });
+
+  it("renders promoted pages even when the GitHub page list and sidebar omit them", async () => {
+    repository.paths = ["Home.md", "index/People.md"];
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (url.endsWith("/_pages")) return new Response('<a href="/Hyp-ed/hyped-2027/wiki/Home">Home</a>');
+      if (url.endsWith("/_Sidebar.md")) return new Response("* [Home](Home)");
+      return new Response('<article class="markdown-body"><p>Published content</p></article>');
+    }));
+    const snapshot = await getGithubWikiSnapshot();
+    expect(snapshot.status).toBe("live");
+    expect(snapshot.indexNavigation.map((item) => item.pageId)).toEqual(["People"]);
+    expect(snapshot.navigation.map((item) => item.pageId)).toEqual(["Home"]);
+    expect(snapshot.pages.find((page) => page.id === "People")?.html).toContain("Published content");
+  });
+
+  it("handles folder removal on the next snapshot and keeps page links valid", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (url.endsWith("/_pages")) return new Response('<a href="/Hyp-ed/hyped-2027/wiki/Home">Home</a><a href="/Hyp-ed/hyped-2027/wiki/People">People</a>');
+      if (url.endsWith("/_Sidebar.md")) return new Response("* [Home](Home)\n* [People](People)");
+      return new Response('<article class="markdown-body"><p>Content</p></article>');
+    }));
+    repository.paths = ["Home.md", "index/People.md"];
+    expect((await getGithubWikiSnapshot()).indexNavigation).toHaveLength(1);
+    repository.paths = ["Home.md", "People.md"];
+    const snapshot = await getGithubWikiSnapshot();
+    expect(snapshot.indexNavigation).toEqual([]);
+    expect(snapshot.navigation.map((item) => item.pageId)).toEqual(["Home", "People"]);
   });
 });
 

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const societySearchQuerySchema = z.string().trim().min(2).max(100);
-export const societySearchKindSchema = z.enum(["wiki", "people", "onboarding", "teams"]);
+export const societySearchKindSchema = z.literal("wiki");
 
 export const societySearchResultSchema = z.object({
   excerpt: z.string().max(240),

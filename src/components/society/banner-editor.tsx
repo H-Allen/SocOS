@@ -13,6 +13,7 @@ export function BannerEditor({ hasImage, page, positionY = 50 }: { hasImage: boo
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
   const [repositioning, setRepositioning] = useState(false);
   const [draftPosition, setDraftPosition] = useState(positionY);
 
@@ -24,11 +25,13 @@ export function BannerEditor({ hasImage, page, positionY = 50 }: { hasImage: boo
     setBusy(true);
     setError("");
     const body = new FormData();
+    setMessage("");
     body.set("page", page);
     body.set("image", image);
     try {
       const response = await fetch("/api/site-banner", { body, method: "POST" });
       if (!response.ok) throw new Error(await response.text() || "The cover could not be changed.");
+      setMessage("Cover updated.");
       router.refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The cover could not be changed.");
@@ -41,6 +44,7 @@ export function BannerEditor({ hasImage, page, positionY = 50 }: { hasImage: boo
   async function restoreDefault() {
     setBusy(true);
     setError("");
+    setMessage("");
     try {
       const response = await fetch("/api/site-banner", {
         body: JSON.stringify({ page }),
@@ -48,6 +52,7 @@ export function BannerEditor({ hasImage, page, positionY = 50 }: { hasImage: boo
         method: "DELETE",
       });
       if (!response.ok) throw new Error(await response.text() || "The default cover could not be restored.");
+      setMessage("Default banner restored.");
       router.refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The default cover could not be restored.");
@@ -72,6 +77,7 @@ export function BannerEditor({ hasImage, page, positionY = 50 }: { hasImage: boo
   async function savePosition() {
     setBusy(true);
     setError("");
+    setMessage("");
     try {
       const response = await fetch("/api/site-banner", {
         body: JSON.stringify({ page, position: draftPosition }),
@@ -80,6 +86,7 @@ export function BannerEditor({ hasImage, page, positionY = 50 }: { hasImage: boo
       });
       if (!response.ok) throw new Error(await response.text() || "The cover position could not be saved.");
       setRepositioning(false);
+      setMessage("Cover position saved.");
       router.refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The cover position could not be saved.");
@@ -107,7 +114,7 @@ export function BannerEditor({ hasImage, page, positionY = 50 }: { hasImage: boo
         setRepositioning(true);
         setError("");
       }} type="button">Reposition</button>}
-      {hasImage && !repositioning && <button disabled={busy} onClick={restoreDefault} type="button">Remove</button>}
+      {hasImage && !repositioning && <button disabled={busy} onClick={restoreDefault} type="button">Use default</button>}
       {repositioning && (
         <>
           <span className={styles.bannerPositionLabel}>Move image</span>
@@ -117,6 +124,7 @@ export function BannerEditor({ hasImage, page, positionY = 50 }: { hasImage: boo
         </>
       )}
       {error && <small role="alert">{error}</small>}
+      {message && !error && <small role="status">{message}</small>}
     </div>
   );
 }

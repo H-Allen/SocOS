@@ -10,6 +10,7 @@ export const editorSessionDurationMs = 5 * 24 * 60 * 60 * 1000;
 export type CurrentEditor = {
   email: string;
   uid: string;
+  photoUrl?: string;
 };
 
 export function isApprovedEditorEmail(email: string | undefined) {
@@ -32,9 +33,19 @@ export async function getCurrentEditor(): Promise<CurrentEditor | null> {
       ? await getAdminAuth().verifySessionCookie(session, true)
       : await getAdminAuth().verifyIdToken(session);
     if (!decoded.email_verified || !isApprovedEditorEmail(decoded.email)) return null;
-    return { email: decoded.email!, uid: decoded.uid };
+    return { email: decoded.email!, uid: decoded.uid, photoUrl: accountPhotoUrl(decoded.picture) };
   } catch {
     return null;
+  }
+}
+
+function accountPhotoUrl(value: unknown) {
+  if (typeof value !== "string") return undefined;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password ? url.href : undefined;
+  } catch {
+    return undefined;
   }
 }
 

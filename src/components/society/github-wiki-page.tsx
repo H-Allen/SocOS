@@ -10,41 +10,46 @@ type GithubWikiPageProps = {
   bannerImageUrl?: string | null;
   bannerPosition?: number;
   canEdit?: boolean;
+  indexNavigation: GithubWikiNavigationItem[];
   navigation: GithubWikiNavigationItem[];
   page: GithubWikiPageData;
   status: GithubWikiSnapshot["status"];
 };
 
-export function GithubWikiPage({ bannerImageUrl, bannerPosition, canEdit, navigation, page, status }: GithubWikiPageProps) {
-  const breadcrumbs = pageBreadcrumbs(page, navigation);
-  const navigationPages = navigation.flatMap((item) => item.pageId ? [{ id: item.pageId, title: item.title }] : []);
-  if (!navigationPages.some((item) => item.id === page.id)) {
+export function GithubWikiPage({ bannerImageUrl, bannerPosition, canEdit, indexNavigation, navigation, page, status }: GithubWikiPageProps) {
+  const isIndexPage = indexNavigation.some((item) => item.pageId === page.id);
+  const breadcrumbs = pageBreadcrumbs(page, isIndexPage ? indexNavigation : navigation);
+  const mainPages = indexNavigation.flatMap((item) => item.pageId ? [{ id: item.pageId, title: item.title }] : []);
+  const navigationPages = Array.from(new Map(navigation.flatMap((item) => item.pageId
+    ? [[item.pageId, { id: item.pageId, title: item.title }] as const]
+    : [])).values());
+  if (!isIndexPage && !navigationPages.some((item) => item.id === page.id)) {
     navigationPages.push({ id: page.id, title: page.navigationTitle });
   }
-  const statusLabel = status === "live"
-    ? "Live from GitHub"
-    : status === "partial" ? "GitHub · partial sync" : "GitHub unavailable";
+  const updatedAt = formatUpdatedAt(page.updatedAt);
+  const wordCount = page.text.trim().split(/\s+/).filter(Boolean).length;
+  const readingMinutes = status !== "unavailable" && wordCount ? Math.max(1, Math.ceil(wordCount / 200)) : null;
 
   return (
     <article>
       <div className={styles.societyDocumentToolbar}>
         <div className={styles.societyDocumentTrail}>
-          <span className={styles.wikiBreadcrumbs}>
-            <Link href="/wiki">Wiki</Link>
+          <span className={styles.wikiBreadcrumbs} data-main-page={isIndexPage}>
+            {!isIndexPage && <Link href="/wiki">Wiki</Link>}
             {breadcrumbs.map((crumb) => (
               <span key={crumb.id}>
-                <i>/</i>
+                {!isIndexPage && <i>/</i>}
                 {crumb.pageId && crumb.pageId !== page.id
                   ? <Link href={`/wiki?page=${encodeURIComponent(crumb.pageId)}`}>{crumb.title}</Link>
                   : <b>{crumb.title}</b>}
               </span>
             ))}
           </span>
-          <small data-state={status === "live" ? "published" : "draft"}>{statusLabel}</small>
         </div>
         <div className={styles.societyDocumentActions}>
           <GithubWikiPageSelect
             activePageId={page.id}
+            mainPages={mainPages}
             pages={navigationPages}
           />
           <GithubWikiCopyLink />
@@ -53,41 +58,32 @@ export function GithubWikiPage({ bannerImageUrl, bannerPosition, canEdit, naviga
       </div>
 
       <header>
-        <SocietyDocumentCover bannerPage="wiki" canEdit={canEdit} imageUrl={bannerImageUrl} label="HYPED / TECHNICAL WIKI" positionY={bannerPosition} tone="wiki" />
+        <SocietyDocumentCover bannerPage={page.id} canEdit={canEdit} imageUrl={bannerImageUrl} positionY={bannerPosition} />
         <div className={styles.societyDocumentIdentity}>
-          <span className={styles.societyDocumentEyebrow}>Technical documentation</span>
           <h1>{page.title}</h1>
-          <div className={styles.githubWikiMeta}>
-            <span>Source <strong>GitHub Wiki</strong></span>
-            <span>Updated <strong>{formatUpdatedAt(page.updatedAt)}</strong></span>
-            <span>Refresh <strong>every minute</strong></span>
-          </div>
+          {(updatedAt || readingMinutes) && (
+            <div className={styles.githubWikiMeta}>
+              {updatedAt && <span>Last updated <time dateTime={page.updatedAt!}>{updatedAt}</time></span>}
+              {readingMinutes && <span title="Estimated at 200 words per minute">About {readingMinutes} min read</span>}
+            </div>
+          )}
         </div>
       </header>
-
-      {page.id === "Home" && (
-        <aside className={styles.githubWikiWelcome}>
-          <span>New member?</span>
-          <div>
-            <strong>Use the getting-started checklist before diving into the detail.</strong>
-            <p>It points you to the project overview, team information and your first contact.</p>
-          </div>
-          <Link href="/start">Open the new member route →</Link>
-        </aside>
-      )}
 
       <div className={styles.wikiReadingLayout}>
         <div className={styles.wikiDocument}>
           {status !== "live" && (
             <div className={styles.githubWikiSyncNotice} role="status">
-              <strong>{status === "partial" ? "A few Wiki pages could not be refreshed." : "The Wiki could not be refreshed."}</strong>
-              <span>The rest of the HYPED site is still working. You can always read the source directly on GitHub.</span>
+              <strong>{status === "partial" ? "Some Wiki content or navigation could not be refreshed." : "The Wiki could not be refreshed."}</strong>
+              <span>You can read the source directly on GitHub while we reconnect.</span>
             </div>
           )}
 
           <div
             className={`${styles.wikiRenderedBody} ${styles.githubWikiBody}`}
-            dangerouslySetInnerHTML={{ __html: page.html }}
+            dangerouslySetInnerHTML={{ __html: /<h1[\s>]/i.test(page.html)
+              ? page.html.replace(/<(\/?)h([1-6])(?=[\s>])/gi, (_, close, level) => `<${close}h${Math.min(Number(level) + 1, 6)}`)
+              : page.html }}
           />
         </div>
 
@@ -121,9 +117,9 @@ function pageBreadcrumbs(page: GithubWikiPageData, navigation: GithubWikiNavigat
 }
 
 function formatUpdatedAt(value: string | null) {
-  if (!value) return "on GitHub";
+  if (!value) return null;
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "on GitHub";
+  if (Number.isNaN(date.getTime())) return null;
   return new Intl.DateTimeFormat("en-GB", {
     day: "numeric",
     month: "short",

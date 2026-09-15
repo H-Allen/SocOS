@@ -19,6 +19,7 @@
     "cheerio": "^1.0.0",
     "firebase": "^12.18.0",
     "firebase-admin": "^14.2.0",
+    "isomorphic-git": "^1.42.2",
     "katex": "^0.18.4",
     "next": "^16.3.0",
     "react": "^19.2.8",

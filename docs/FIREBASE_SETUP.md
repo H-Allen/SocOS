@@ -1,17 +1,21 @@
-# Optional Firebase content source
+# Optional Firebase banner storage
 
-Firebase is not required to run the HYPED website. The homepage and onboarding
-guide have built-in content; teams and people are shown only when published.
+GitHub is the only page-content source. Firebase is optional for banner images,
+per-page crop positions and approved-editor authentication.
 
-When configured, the server reads published content from these locations:
+The server uses:
 
-- `societies/hyped/homepages/published`
-- `societies/hyped/onboarding/guide`
-- `societies/hyped/teams/*`
-- `societies/hyped/publicProfiles/*`
-- `societies/hyped/site/settings` for optional page-banner paths
-- `societies/hyped/public/homepage/*` in Cloud Storage
+- `societies/hyped/site/settings` for banner paths and positions, keyed by encoded Wiki page ID
 - `societies/hyped/public/banners/*` in Cloud Storage
+
+Former homepage, onboarding, team and profile documents are no longer read.
+Existing documents and images are not deleted by this change. A legacy shared
+`wiki` banner is read as the Wiki Home banner; replacing or removing it migrates
+that page without changing other Wiki pages.
+
+When Firestore/Storage are not configured, settings and images use `.local-data`.
+This local fallback needs a persistent writable disk and is not a replacement
+for production cloud storage on ephemeral hosts. Authentication still requires Firebase.
 
 Public visitors cannot write data. Approved editors authenticate with Google;
 the server verifies their Firebase ID token, issues an HTTP-only session cookie
@@ -19,7 +23,7 @@ and checks the approved email list again for every banner change. Firebase App
 Hosting supplies Application Default Credentials and web-app configuration in
 production.
 
-For local server-side reads, copy `.env.example` to `.env.local` and set:
+For local banner storage and editor authentication, copy `.env.example` to `.env.local` and set:
 
 ```dotenv
 FIREBASE_PROJECT_ID=your-project-id
@@ -40,5 +44,6 @@ the three web-app values above from **Project settings > Your apps**.
 Successful sign-in creates a secure, HTTP-only, same-site editor cookie lasting
 five days. Banner uploads accept JPG, PNG and WebP files up to 6 MB.
 
-Never add service-account JSON or private keys to the repository. If the
-credentials or services are unavailable, the site falls back automatically.
+Never add service-account JSON or private keys to the repository. If banner settings cannot be read, the default banner is shown. Failed edits
+report an error; a configured but unavailable cloud service does not silently
+switch writes to local storage.

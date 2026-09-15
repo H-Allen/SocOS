@@ -7,29 +7,24 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { SearchIcon } from "@/components/icons";
 import {
   societySearchResponseSchema,
-  type SocietySearchKind,
   type SocietySearchResult,
 } from "@/domain/search";
 
 import styles from "./society.module.css";
+import { Modal } from "./modal";
 
 type SocietySearchProps = {
   onClose: () => void;
   onOpen: () => void;
   open: boolean;
-};
-
-const kindLabels: Record<SocietySearchKind, string> = {
-  onboarding: "Start here",
-  people: "People",
-  teams: "Teams",
-  wiki: "Wiki",
+  pages: Array<{ id: string; title: string }>;
 };
 
 export function SocietySearch({
   onClose,
   onOpen,
   open,
+  pages,
 }: SocietySearchProps) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -37,6 +32,7 @@ export function SocietySearch({
   const [results, setResults] = useState<SocietySearchResult[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [attempt, setAttempt] = useState(0);
   const closeAndReset = useCallback(() => {
     setQuery("");
     setResults([]);
@@ -51,7 +47,6 @@ export function SocietySearch({
         event.preventDefault();
         onOpen();
       }
-      if (event.key === "Escape" && open) closeAndReset();
     }
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
@@ -90,17 +85,11 @@ export function SocietySearch({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [open, query]);
+  }, [open, query, attempt]);
 
   if (!open) return null;
 
-  const quickLinks = [
-    { href: "/", icon: "⌂", label: "Home" },
-    { href: "/start", icon: "→", label: "Start here" },
-    { href: "/wiki", icon: "▤", label: "Technical Wiki" },
-    { href: "/teams", icon: "⌘", label: "Teams" },
-    { href: "/people", icon: "◎", label: "People" },
-  ];
+  const quickLinks = Array.from(new Map(pages.map((page) => [page.id, page])).values()).slice(0, 8);
 
   function openResult(href: string) {
     closeAndReset();
@@ -123,13 +112,16 @@ export function SocietySearch({
   }
 
   return (
-    <div className={styles.searchLayer}>
-      <button aria-label="Close search" className={styles.searchBackdrop} onClick={closeAndReset} type="button" />
-      <section aria-label="Search HYPED" aria-modal="true" className={styles.searchDialog} role="dialog">
+    <Modal className={styles.searchDialog} label="Search HYPED" onClose={closeAndReset}>
         <div className={styles.searchInputRow}>
           <SearchIcon />
           <input
             aria-label="Search HYPED"
+            aria-controls="search-results"
+            aria-expanded={results.length > 0}
+            aria-activedescendant={results.length ? `search-result-${selectedIndex}` : undefined}
+            aria-autocomplete="list"
+            role="combobox"
             autoComplete="off"
             onChange={(event) => {
               const nextQuery = event.target.value;
@@ -139,7 +131,7 @@ export function SocietySearch({
               setStatus(nextQuery.trim().length >= 2 ? "loading" : "idle");
             }}
             onKeyDown={handleKeys}
-            placeholder="Search pages, people and onboarding…"
+            placeholder="Search the Wiki…"
             ref={inputRef}
             type="search"
             value={query}
@@ -153,34 +145,35 @@ export function SocietySearch({
               <p className={styles.searchEyebrow}>Jump to</p>
               <div className={styles.searchQuickLinks}>
                 {quickLinks.map((item) => (
-                  <Link href={item.href} key={item.href} onClick={closeAndReset}>
-                    <span>{item.icon}</span>{item.label}<b>→</b>
+                  <Link href={`/wiki?page=${encodeURIComponent(item.id)}`} key={item.id} onClick={closeAndReset}>
+                    {item.title}<b aria-hidden="true">→</b>
                   </Link>
                 ))}
               </div>
-              <p className={styles.searchHint}>Try a skill, team, person, project or question.</p>
+              <p className={styles.searchHint}>Search page titles and content from the GitHub Wiki.</p>
             </>
           ) : status === "loading" ? (
-            <div className={styles.searchMessage}><span>···</span><strong>Looking through HYPED</strong></div>
+            <div className={styles.searchMessage} role="status"><strong>Searching…</strong></div>
           ) : status === "error" ? (
-            <div className={styles.searchMessage}><span>!</span><strong>Search could not load</strong><p>Close this and try again in a moment.</p></div>
+            <div className={styles.searchMessage} role="alert"><strong>Search could not load</strong><p>Check your connection and try again.</p><button className={styles.stepAction} onClick={() => { setStatus("loading"); setAttempt((value) => value + 1); }} type="button">Retry search</button></div>
           ) : results.length ? (
-            <div className={styles.searchResults} role="listbox">
+            <div aria-label="Search results" className={styles.searchResults} id="search-results" role="listbox">
               <p className={styles.searchEyebrow}>{results.length} {results.length === 1 ? "result" : "results"}</p>
               {results.map((result, index) => (
                 <button
                   aria-selected={selectedIndex === index}
                   className={selectedIndex === index ? styles.searchResultSelected : undefined}
                   key={result.id}
+                  id={`search-result-${index}`}
+                  tabIndex={-1}
                   onClick={() => openResult(result.href)}
                   onMouseEnter={() => setSelectedIndex(index)}
                   role="option"
                   type="button"
                 >
-                  <span className={styles.searchResultIcon}>{result.icon}</span>
                   <span className={styles.searchResultCopy}>
                     <strong>{result.title}</strong>
-                    <small>{kindLabels[result.kind]}</small>
+                    <small>Wiki</small>
                     <p>{result.excerpt}</p>
                   </span>
                   <b>↵</b>
@@ -188,16 +181,15 @@ export function SocietySearch({
               ))}
             </div>
           ) : (
-            <div className={styles.searchMessage}><span>⌕</span><strong>Nothing found for “{query.trim()}”</strong><p>Try a broader word, a team name or someone’s skill.</p></div>
+            <div className={styles.searchMessage} role="status"><strong>Nothing found for “{query.trim()}”</strong><p>Try another name or topic.</p></div>
           )}
         </div>
 
         <footer className={styles.searchFooter}>
           <span><kbd>↑</kbd><kbd>↓</kbd> move</span>
           <span><kbd>↵</kbd> open</span>
-          <span>Searches this society only</span>
+          <span>HYPED Wiki</span>
         </footer>
-      </section>
-    </div>
+    </Modal>
   );
 }

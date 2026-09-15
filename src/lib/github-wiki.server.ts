@@ -2,6 +2,8 @@ import "server-only";
 
 import { load } from "cheerio";
 import katex from "katex";
+import { indexPageIds, splitWikiPages } from "@/domain/wiki-navigation";
+import { getWikiRepositoryPaths } from "@/lib/wiki-repository.server";
 
 const GITHUB_ORIGIN = "https://github.com";
 const DEFAULT_WIKI_REPOSITORY = "Hyp-ed/hyped-2027";
@@ -40,6 +42,7 @@ export type GithubWikiPage = {
 };
 
 export type GithubWikiSnapshot = {
+  indexNavigation: GithubWikiNavigationItem[];
   navigation: GithubWikiNavigationItem[];
   pages: GithubWikiPage[];
   sourceUrl: string;
@@ -66,24 +69,33 @@ export async function getGithubWikiSnapshot(): Promise<GithubWikiSnapshot> {
   const syncedAt = new Date().toISOString();
 
   try {
-    const [indexResponse, sidebarResponse] = await Promise.all([
+    const [indexResponse, sidebarResponse, repository] = await Promise.all([
       fetch(GITHUB_WIKI_PAGES, {
+        signal: AbortSignal.timeout(10_000),
         headers: githubHeaders(),
         next: { revalidate: WIKI_REVALIDATE_SECONDS, tags: [WIKI_CACHE_TAG] },
       }),
       fetch(GITHUB_WIKI_SIDEBAR, {
+        signal: AbortSignal.timeout(10_000),
         headers: { ...githubHeaders(), Accept: "text/plain" },
         next: { revalidate: WIKI_REVALIDATE_SECONDS, tags: [WIKI_CACHE_TAG] },
       }),
+      getWikiRepositoryPaths(GITHUB_WIKI_REPOSITORY),
     ]);
     if (!indexResponse.ok) throw new Error(`GitHub Wiki index returned ${indexResponse.status}`);
 
     const indexPages = parseGithubWikiIndex(await indexResponse.text());
+    for (const id of indexPageIds(repository.paths)) {
+      if (!indexPages.some((page) => page.id.toLowerCase() === id.toLowerCase())) {
+        indexPages.push({ id, title: navigationTitleFromSource(id, id), updatedAt: null });
+      }
+    }
     if (!indexPages.length) throw new Error("GitHub Wiki index did not contain any pages");
 
     const results = await Promise.allSettled(indexPages.map(async (indexPage) => {
       const githubUrl = `${GITHUB_WIKI_ROOT}/${encodeURIComponent(indexPage.id)}`;
       const response = await fetch(githubUrl, {
+        signal: AbortSignal.timeout(10_000),
         headers: githubHeaders(),
         next: { revalidate: WIKI_REVALIDATE_SECONDS, tags: [WIKI_CACHE_TAG] },
       });
@@ -99,18 +111,22 @@ export async function getGithubWikiSnapshot(): Promise<GithubWikiSnapshot> {
     const sidebarItems = sidebarResponse.ok
       ? parseGithubWikiSidebar(await sidebarResponse.text())
       : [];
-    const { navigation, pages } = applyGithubWikiSidebar(fetchedPages, sidebarItems);
+    const { pages } = applyGithubWikiSidebar(fetchedPages, sidebarItems);
+    const { indexNavigation, wikiPages } = splitWikiPages(pages, sidebarItems, repository.paths);
+    const { navigation } = applyGithubWikiSidebar(wikiPages, sidebarItems);
     const sidebarUnavailable = !sidebarResponse.ok || sidebarItems.length === 0;
 
     return {
+      indexNavigation,
       navigation,
       pages,
       sourceUrl: GITHUB_WIKI_ROOT,
-      status: sidebarUnavailable || results.some((result) => result.status === "rejected") ? "partial" : "live",
+      status: !repository.available || sidebarUnavailable || results.some((result) => result.status === "rejected") ? "partial" : "live",
       syncedAt,
     };
   } catch {
     return {
+      indexNavigation: [],
       navigation: fallbackNavigation([unavailablePage({ id: "Home", title: "Home", updatedAt: null })]),
       pages: [unavailablePage({ id: "Home", title: "Home", updatedAt: null })],
       sourceUrl: GITHUB_WIKI_ROOT,
@@ -273,15 +289,26 @@ export function parseGithubWikiPage(html: string, indexPage: WikiIndexPage): Git
   article.find("a[href]").each((_, element) => {
     const href = $(element).attr("href");
     if (!href) return;
-    const internalId = wikiSlugFromHref(href);
+    if (href.startsWith("#")) return;
+    let target: URL;
+    try {
+      target = new URL(href, `${GITHUB_WIKI_ROOT}/${encodeURIComponent(indexPage.id)}`);
+    } catch {
+      $(element).removeAttr("href");
+      return;
+    }
+    const wikiPath = new URL(GITHUB_WIKI_ROOT).pathname;
+    const belongsToCurrentWiki = target.origin === GITHUB_ORIGIN
+      && (target.pathname.toLowerCase() === wikiPath.toLowerCase()
+        || target.pathname.toLowerCase().startsWith(`${wikiPath.toLowerCase()}/`));
+    const internalId = belongsToCurrentWiki ? wikiSlugFromHref(href) : null;
     if (internalId && !isIgnoredSlug(internalId)) {
       if (!outgoingIds.includes(internalId)) outgoingIds.push(internalId);
-      $(element).attr("href", `/wiki?page=${encodeURIComponent(internalId)}`);
+      $(element).attr("href", `/wiki?page=${encodeURIComponent(internalId)}${target.hash}`);
       $(element).removeAttr("target rel");
       return;
     }
 
-    if (href.startsWith("#")) return;
     try {
       const absolute = new URL(href, `${GITHUB_WIKI_ROOT}/${encodeURIComponent(indexPage.id)}`);
       if (absolute.protocol === "https:" || absolute.protocol === "http:") {
@@ -534,7 +561,7 @@ function wikiSlugFromHref(href: string) {
   if (!relativePath.startsWith("/") && !relativePath.includes(":")) {
     const relativeSlug = relativePath.split("/").filter(Boolean).at(-1);
     if (relativeSlug && /^[a-z0-9][a-z0-9_%&+.-]*$/i.test(relativeSlug)) {
-      try { return decodeURIComponent(relativeSlug); } catch { return null; }
+      try { return decodeURIComponent(relativeSlug).replace(/\.(md|markdown)$/i, ""); } catch { return null; }
     }
   }
   try {
@@ -544,7 +571,7 @@ function wikiSlugFromHref(href: string) {
     if (!wikiPath) return null;
     const encodedSlug = url.pathname.slice(wikiPath.length).split("/").filter(Boolean).at(-1);
     if (!encodedSlug && url.pathname.replace(/\/$/, "") === wikiPath.replace(/\/$/, "")) return "Home";
-    return encodedSlug ? decodeURIComponent(encodedSlug) : null;
+    return encodedSlug ? decodeURIComponent(encodedSlug).replace(/\.(md|markdown)$/i, "") : null;
   } catch {
     return null;
   }

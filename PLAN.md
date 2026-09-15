@@ -1,43 +1,26 @@
-# HYPED website plan
+# HYPED Wiki product boundary
 
-## Product boundary
-
-This is one public website for HYPED, not a general society platform.
-
-It should help a new or existing member answer five questions:
-
-1. What is HYPED?
-2. Where should I start?
-3. How do the teams fit together?
-4. Who should I ask?
-5. Where is the technical knowledge?
+The website is a reader for HYPED's GitHub Wiki, not a separate member portal.
 
 ## Sources of truth
 
-- The technical Wiki is owned and edited on GitHub. The repository is selected
-  with `HYPED_GITHUB_WIKI_REPOSITORY` and currently defaults to
-  `Hyp-ed/hyped-2025`. This application changes its presentation and navigation,
-  not its visible content.
-- The other public pages can read published content from Firebase on the
-  server. The homepage and onboarding guide have conservative built-in content.
-  Team and people pages do not invent fallback records.
-- New-member completion is deliberately local to each browser. It is a helpful
-  checklist, not an account or monitoring system.
+- GitHub supplies page content, titles, navigation and search documents.
+- `HYPED_GITHUB_WIKI_REPOSITORY` selects the Wiki; the default is `Hyp-ed/hyped-2027`.
+- Optional per-page banner images and crop positions live in Firebase or local storage.
+- Wiki text is edited on GitHub. The application sanitises and presents it without inventing content.
 
 ## Product rules
 
-- No public application accounts, invitations, memberships or private areas.
-- Approved editors may sign in only to manage page-cover images.
-- No multi-society routing or society marketplace.
-- No in-app Wiki editor, drafts, revisions or publishing workflow.
-- No arbitrary themes; use the fixed HYPED palette.
-- Keep the five public routes simple, readable and mobile-friendly.
-- Link to an official destination only when its exact URL is known.
+- The root opens Wiki Home. Existing `/wiki?page=...` links remain valid.
+- Removed standalone routes redirect to the Wiki; no duplicate Home, Start, Teams or People content.
+- A published root `index/` directory in the Wiki optionally supplies standalone links above the Wiki tree. These pages still use the same renderer, search, URLs and banners; no folder means no extra section.
+- Every Wiki page has the default red-and-black banner unless an editor uploads a custom image.
+- Approved editors can upload, reposition and remove individual page banners.
+- No visitor accounts, memberships, private workspaces or in-app Wiki editor.
+- Keep navigation, search and reading accessible on desktop and mobile.
 
 ## Remaining work
 
-- Complete the content in the GitHub Wiki.
-- Publish current people only after confirming consent.
-- Connect the production Firebase project only if the committee wants to keep
-  non-Wiki public content there.
-- Deploy through Firebase App Hosting and verify monitoring and rollback.
+- Maintain content in the GitHub Wiki.
+- Configure approved banner editors and production image storage if desired.
+- Deploy and verify production authentication, monitoring and rollback.

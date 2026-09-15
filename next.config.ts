@@ -14,6 +14,9 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
   reactStrictMode: true,
   poweredByHeader: false,
+  async redirects() {
+    return ["/start", "/teams", "/people"].map((source) => ({ source, destination: "/", permanent: true }));
+  },
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },

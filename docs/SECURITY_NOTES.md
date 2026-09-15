@@ -1,5 +1,20 @@
 # Security notes
 
+## 2026-09-15 dependency check
+
+Adding `isomorphic-git@1.42.2` for read-only Wiki directory discovery did not
+introduce an advisory for that package in `npm audit --omit=dev`. The audit
+reported eight production dependency findings: six moderate in the existing
+Firebase dependency chain, one high for `sharp <0.35.4`, and one critical
+package finding for the installed Next.js 16.3.0.
+
+The Next.js finding includes [GHSA-p293-qw3h-jr36](https://github.com/advisories/GHSA-p293-qw3h-jr36)
+and [GHSA-2xp9-vwfh-vxw4](https://github.com/advisories/GHSA-2xp9-vwfh-vxw4),
+with affected versions below 16.3.3. The sharp finding is
+[GHSA-rgj7-g3m4-5g8c](https://github.com/advisories/GHSA-rgj7-g3m4-5g8c).
+These existing framework/image dependencies were not upgraded as part of the
+navigation feature. They need a separate tested security update before deployment.
+
 ## 2026-08-10 dependency audit
 
 `npm audit --omit=dev` reports six moderate findings for `uuid < 11.1.1` in the

@@ -18,22 +18,22 @@ const documents: SocietySearchDocument[] = [
     title: "Software handbook",
   },
   {
-    body: "I work across embedded software and testing tools.",
-    excerpt: "Wiki editor · Software",
-    href: "/people?member=sam",
+    body: "Embedded software and testing tools for pod telemetry.",
+    excerpt: "Software testing and telemetry",
+    href: "/wiki?page=Telemetry",
     icon: "👤",
-    id: "people:sam",
+    id: "wiki:telemetry",
     keywords: ["C++", "React", "Telemetry", "Pod telemetry", "owns runs leads"],
-    kind: "people",
-    title: "Sam Walker",
+    kind: "wiki",
+    title: "Telemetry",
   },
   {
     excerpt: "Learn how every team connects to the final pod.",
-    href: "/start#see-the-whole-system",
+    href: "/wiki?page=System",
     icon: "→",
-    id: "onboarding:whole-system",
+    id: "wiki:whole-system",
     keywords: ["first week", "dynamics", "software"],
-    kind: "onboarding",
+    kind: "wiki",
     title: "See the whole system",
   },
 ];
@@ -43,24 +43,24 @@ describe("society search", () => {
     const results = rankSocietySearchDocuments("software", documents);
     expect(results[0]?.id).toBe("wiki:software-handbook");
     expect(results.map((result) => result.id)).toEqual(expect.arrayContaining([
-      "people:sam",
-      "onboarding:whole-system",
+      "wiki:telemetry",
+      "wiki:whole-system",
     ]));
   });
 
-  it("finds people by skills and responsibilities", () => {
+  it("finds Wiki pages by keywords", () => {
     expect(rankSocietySearchDocuments("pod telemetry", documents)[0]).toMatchObject({
-      href: "/people?member=sam",
-      title: "Sam Walker",
+      href: "/wiki?page=Telemetry",
+      title: "Telemetry",
     });
   });
 
-  it("favours the person with repeated ownership context", () => {
-    expect(rankSocietySearchDocuments("telemetry", documents)[0]?.id).toBe("people:sam");
+  it("favours the Wiki page with repeated matching context", () => {
+    expect(rankSocietySearchDocuments("telemetry", documents)[0]?.id).toBe("wiki:telemetry");
   });
 
   it("understands a natural question without requiring filler words", () => {
-    expect(rankSocietySearchDocuments("who runs telemetry", documents)[0]?.id).toBe("people:sam");
+    expect(rankSocietySearchDocuments("who runs telemetry", documents)[0]?.id).toBe("wiki:telemetry");
   });
 
   it("requires every query word and rejects tiny searches", () => {

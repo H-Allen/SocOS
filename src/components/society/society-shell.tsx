@@ -2,10 +2,9 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
 import { useCallback, useState, type ReactNode } from "react";
 
-import { ChevronRightIcon, ExternalIcon, HomeIcon, PeopleIcon, RouteIcon, SearchIcon, TeamsIcon } from "@/components/icons";
+import { ChevronRightIcon, ExternalIcon, SearchIcon } from "@/components/icons";
 
 import { SocietySearch } from "./society-search";
 import { EditorAuthControl } from "./editor-auth-control";
@@ -24,23 +23,20 @@ export function SocietyShell({
   activeWikiPageId,
   children,
   editorEmail,
+  editorPhotoUrl,
+  indexNavigation = [],
   wikiNavigation = [],
 }: {
   activeWikiPageId?: string;
   children: ReactNode;
   editorEmail?: string;
+  editorPhotoUrl?: string;
+  indexNavigation?: WikiNavigationItem[];
   wikiNavigation?: WikiNavigationItem[];
 }) {
-  const pathname = usePathname();
   const [searchOpen, setSearchOpen] = useState(false);
   const openSearch = useCallback(() => setSearchOpen(true), []);
   const closeSearch = useCallback(() => setSearchOpen(false), []);
-  const mainLinks = [
-    { href: "/", label: "Home", icon: HomeIcon },
-    { href: "/start", label: "Start here", icon: RouteIcon },
-    { href: "/teams", label: "Teams", icon: TeamsIcon },
-    { href: "/people", label: "People", icon: PeopleIcon },
-  ];
   const wikiLinks = decorateWikiNavigation(wikiNavigation);
   const [collapsedWikiItems, setCollapsedWikiItems] = useState<Set<string>>(() => initialCollapsedWikiItems(wikiNavigation, activeWikiPageId));
   const isCollapsed = (itemId: string) => collapsedWikiItems.has(itemId);
@@ -50,24 +46,26 @@ export function SocietyShell({
     <div className={styles.appShell} data-society-shell>
       <a className={styles.skipLink} href="#main-content">Skip to content</a>
       <aside className={styles.sidebar}>
-        <div className={styles.societySwitcher}>
+        <Link aria-label="Wiki home" href="/" className={styles.societySwitcher}>
           <HypedMark className={styles.societyLogo} />
-        </div>
+        </Link>
 
-        <button aria-label="Search HYPED" className={styles.searchButton} onClick={openSearch} type="button"><SearchIcon /><span>Search</span><kbd>K</kbd></button>
-
-        <nav aria-label="Main navigation" className={styles.mainNav}>
-          {mainLinks.map(({ href, icon: Icon, label }) => {
-            const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
-            return <Link className={active ? styles.navActive : ""} href={href} key={href}><Icon />{label}</Link>;
-          })}
-        </nav>
+        <button aria-label="Search HYPED" aria-keyshortcuts="Meta+K Control+K" className={styles.searchButton} onClick={openSearch} type="button"><SearchIcon /><span>Search</span><kbd aria-hidden="true">⌘ K</kbd></button>
 
         <div className={`${styles.sidebarSection} ${styles.sidebarWikiSection}`}>
-          <div className={styles.sidebarLabel}><span>Technical Wiki</span><small>GitHub</small></div>
-          <nav aria-label="Technical Wiki" className={styles.sidebarWikiList}>
+          {indexNavigation.length > 0 && (
+            <nav aria-label="Main pages" className={styles.indexNavigation}>
+              {indexNavigation.map((item) => (
+                <Link aria-current={activeWikiPageId === item.pageId ? "page" : undefined} href={`/wiki?page=${encodeURIComponent(item.pageId!)}`} key={item.id}>{item.title}</Link>
+              ))}
+            </nav>
+          )}
+          {(wikiNavigation.length > 0 || indexNavigation.length === 0) && <>
+          <div className={styles.sidebarLabel}>Wiki</div>
+          <nav aria-label="Wiki" className={styles.sidebarWikiList}>
+            {wikiNavigation.length === 0 && <Link className={styles.sidebarWikiLink} href="/wiki">Open Wiki</Link>}
             {visibleWikiLinks.map((item) => (
-              <div className={styles.sidebarWikiRow} data-active={activeWikiPageId === item.pageId} data-depth={item.depth} data-kind={item.kind} key={item.id} style={{ marginLeft: item.depth * 16 }}>
+              <div className={styles.sidebarWikiRow} data-active={activeWikiPageId === item.pageId} data-depth={item.depth} data-kind={item.kind} key={item.id} style={{ marginLeft: item.depth * 12 }}>
                 {item.hasChildren ? (
                   <button
                     aria-expanded={!isCollapsed(item.id)}
@@ -82,30 +80,31 @@ export function SocietyShell({
                 {item.kind === "page" && item.pageId ? (
                   <Link aria-current={activeWikiPageId === item.pageId ? "page" : undefined} className={styles.sidebarWikiLink} href={`/wiki?page=${encodeURIComponent(item.pageId)}`} title={item.title}><b>{item.title}</b></Link>
                 ) : (
-                  <button className={`${styles.sidebarWikiLink} ${styles.sidebarWikiDirectory}`} onClick={() => setCollapsedWikiItems((current) => toggleWikiItem(current, item.id))} type="button"><b>{item.title}</b></button>
+                  <button aria-expanded={!isCollapsed(item.id)} className={`${styles.sidebarWikiLink} ${styles.sidebarWikiDirectory}`} onClick={() => setCollapsedWikiItems((current) => toggleWikiItem(current, item.id))} type="button"><b>{item.title}</b></button>
                 )}
               </div>
             ))}
           </nav>
+          </>}
         </div>
 
         <div className={styles.sidebarBottom}>
-          <EditorAuthControl email={editorEmail} />
           <a href="https://hyp-ed.com" rel="noreferrer" target="_blank">Public website <ExternalIcon /></a>
           <a href="https://github.com/Hyp-ed" rel="noreferrer" target="_blank">GitHub <ExternalIcon /></a>
+          <EditorAuthControl email={editorEmail} photoUrl={editorPhotoUrl} />
         </div>
       </aside>
 
-      <div className={styles.mobileBar}>
+      <header className={styles.mobileBar}>
         <Link className={styles.mobileSociety} href="/"><HypedMark className={styles.mobileSocietyLogo} /></Link>
-        <nav aria-label="Society mobile navigation">
-          {mainLinks.filter(({ href }) => href !== "/").map(({ href, label }) => <Link href={href} key={href}>{label}</Link>)}
+        <nav aria-label="Mobile navigation">
+          <EditorAuthControl email={editorEmail} photoUrl={editorPhotoUrl} />
           <button aria-label="Search HYPED" onClick={openSearch} type="button"><SearchIcon /></button>
         </nav>
-      </div>
+      </header>
 
-      <main className={styles.main} id="main-content">{children}</main>
-      <SocietySearch onClose={closeSearch} onOpen={openSearch} open={searchOpen} />
+      <main className={styles.main} id="main-content" tabIndex={-1}>{children}</main>
+      <SocietySearch pages={[...indexNavigation, ...wikiNavigation].flatMap((item) => item.pageId ? [{ id: item.pageId, title: item.title }] : [])} onClose={closeSearch} onOpen={openSearch} open={searchOpen} />
     </div>
   );
 }
