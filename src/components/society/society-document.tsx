@@ -15,7 +15,10 @@ export function SocietyDocumentCover({ bannerPage, canEdit, imageUrl, positionY 
     <div
       className={styles.societyDocumentCover}
       data-has-image={imageUrl ? "true" : "false"}
-      style={imageUrl ? { backgroundImage: `url(${imageUrl})`, backgroundPosition: `center ${positionY}%` } : undefined}
+      style={{
+        backgroundImage: `url(${imageUrl || "/default-banner.webp"})`,
+        backgroundPosition: imageUrl ? `center ${positionY}%` : "center bottom",
+      }}
     >
       {canEdit && bannerPage && <BannerEditor key={`${bannerPage}:${imageUrl}:${positionY}`} hasImage={Boolean(imageUrl)} page={bannerPage} positionY={positionY} />}
     </div>

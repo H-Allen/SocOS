@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { load } from "cheerio";
 import { SocietyShell } from "@/components/society/society-shell";
 import { GithubWikiPage } from "@/components/society/github-wiki-page";
+import { SocietyDocumentCover } from "@/components/society/society-document";
 import type { GithubWikiNavigationItem, GithubWikiPage as PageData } from "@/lib/github-wiki.server";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
@@ -47,5 +48,42 @@ describe("two-section Wiki presentation", () => {
     expect($('select[aria-label="Choose a page"] optgroup').map((_, el) => $(el).attr("label")).get()).toEqual(["Main pages", "Wiki"]);
     expect($("option[selected]").attr("value")).toBe("People");
     expect($('[data-has-image="false"]')).toHaveLength(1);
+  });
+
+  it("shows decorative default artwork and a square page symbol without banner labels", () => {
+    const $ = load(renderToStaticMarkup(
+      <GithubWikiPage indexNavigation={[]} navigation={technicalPages} page={page} status="live" />,
+    ));
+    expect($('[data-has-image="false"]').attr('style')).toContain('url(/default-banner.webp)');
+    expect($('[data-has-image="false"]').attr('style')).toContain('background-position:center bottom');
+    expect($('header h1').prev('[aria-hidden="true"]').find('svg')).toHaveLength(1);
+    expect($('header').text()).not.toMatch(/HYPED \/ TECHNICAL WIKI|Live from GitHub|Source GitHub Wiki/);
+  });
+
+  it("keeps uploaded banners free of default artwork and preserves their crop", () => {
+    const $ = load(renderToStaticMarkup(
+      <SocietyDocumentCover imageUrl="https://example.com/team.jpg" positionY={72} />,
+    ));
+    expect($('[data-has-image="true"]').attr('style')).toContain('background-position:center 72%');
+    expect($('[data-has-image="true"]').attr('style')).toContain('https://example.com/team.jpg');
+    expect($('[data-has-image="true"]').attr('style')).not.toContain('default-banner.webp');
+    expect($('svg')).toHaveLength(0);
+  });
+
+  it("pairs plain metadata labels with bold dates and reading times", () => {
+    const $ = load(renderToStaticMarkup(
+      <GithubWikiPage indexNavigation={[]} navigation={technicalPages} page={{ ...page, updatedAt: "2024-10-18T12:00:00Z" }} status="live" />,
+    ));
+    expect($('header strong time').text()).toBe('18 Oct 2024');
+    expect($('header strong time').attr('datetime')).toBe('2024-10-18T12:00:00Z');
+    expect($('header strong').map((_, el) => $(el).text()).get()).toEqual(['18 Oct 2024', '1 min']);
+  });
+
+  it("does not invent metadata when the page is unavailable", () => {
+    const $ = load(renderToStaticMarkup(
+      <GithubWikiPage indexNavigation={[]} navigation={[]} page={page} status="unavailable" />,
+    ));
+    expect($('header time')).toHaveLength(0);
+    expect($('header').text()).not.toContain('Reading time');
   });
 });

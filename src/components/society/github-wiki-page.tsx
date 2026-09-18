@@ -60,11 +60,18 @@ export function GithubWikiPage({ bannerImageUrl, bannerPosition, canEdit, indexN
       <header>
         <SocietyDocumentCover bannerPage={page.id} canEdit={canEdit} imageUrl={bannerImageUrl} positionY={bannerPosition} />
         <div className={styles.societyDocumentIdentity}>
+          <div aria-hidden="true" className={styles.documentSymbol}>
+            {page.icon && page.icon !== "·" ? page.icon : (
+              <svg viewBox="0 0 32 32" fill="none" focusable="false">
+                <path d="M7 5h12l6 6v16H7Z M19 5v7h6 M11 17h10 M11 22h7" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+              </svg>
+            )}
+          </div>
           <h1>{page.title}</h1>
           {(updatedAt || readingMinutes) && (
             <div className={styles.githubWikiMeta}>
-              {updatedAt && <span>Last updated <time dateTime={page.updatedAt!}>{updatedAt}</time></span>}
-              {readingMinutes && <span title="Estimated at 200 words per minute">About {readingMinutes} min read</span>}
+              {updatedAt && <span>Updated <strong><time dateTime={page.updatedAt!}>{updatedAt}</time></strong></span>}
+              {readingMinutes && <span title="Estimated at 200 words per minute">Reading time <strong>{readingMinutes} min</strong></span>}
             </div>
           )}
         </div>
