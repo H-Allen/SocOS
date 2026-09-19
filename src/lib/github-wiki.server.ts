@@ -4,18 +4,13 @@ import { load } from "cheerio";
 import katex from "katex";
 import { indexPageIds, splitWikiPages } from "@/domain/wiki-navigation";
 import { getWikiRepositoryPaths } from "@/lib/wiki-repository.server";
+import { GITHUB_WIKI_REPOSITORY } from "@/domain/wiki-config";
+export { GITHUB_WIKI_REPOSITORY } from "@/domain/wiki-config";
 
 const GITHUB_ORIGIN = "https://github.com";
-const DEFAULT_WIKI_REPOSITORY = "Hyp-ed/hyped-2027";
-const configuredWikiRepository = process.env.HYPED_GITHUB_WIKI_REPOSITORY?.trim();
-const GITHUB_WIKI_REPOSITORY = configuredWikiRepository && /^Hyp-ed\/hyped-[a-z0-9-]+$/i.test(configuredWikiRepository)
-  ? configuredWikiRepository
-  : DEFAULT_WIKI_REPOSITORY;
 const GITHUB_WIKI_ROOT = `${GITHUB_ORIGIN}/${GITHUB_WIKI_REPOSITORY}/wiki`;
 const GITHUB_WIKI_PAGES = `${GITHUB_WIKI_ROOT}/_pages`;
 const GITHUB_WIKI_SIDEBAR = `https://raw.githubusercontent.com/wiki/${GITHUB_WIKI_REPOSITORY}/_Sidebar.md`;
-const WIKI_CACHE_TAG = "hyped-github-wiki";
-const WIKI_REVALIDATE_SECONDS = 60;
 
 const ignoredSlugs = new Set(["_pages", "_history", "_edit", "_new", "_toc", "_sidebar", "_footer"]);
 
@@ -67,18 +62,19 @@ export type WikiIndexPage = {
 
 export async function getGithubWikiSnapshot(): Promise<GithubWikiSnapshot> {
   const syncedAt = new Date().toISOString();
+  const deadline = AbortSignal.timeout(90_000);
 
   try {
     const [indexResponse, sidebarResponse, repository] = await Promise.all([
       fetch(GITHUB_WIKI_PAGES, {
         signal: AbortSignal.timeout(10_000),
         headers: githubHeaders(),
-        next: { revalidate: WIKI_REVALIDATE_SECONDS, tags: [WIKI_CACHE_TAG] },
+        cache: "no-store",
       }),
       fetch(GITHUB_WIKI_SIDEBAR, {
         signal: AbortSignal.timeout(10_000),
         headers: { ...githubHeaders(), Accept: "text/plain" },
-        next: { revalidate: WIKI_REVALIDATE_SECONDS, tags: [WIKI_CACHE_TAG] },
+        cache: "no-store",
       }),
       getWikiRepositoryPaths(GITHUB_WIKI_REPOSITORY),
     ]);
@@ -92,16 +88,16 @@ export async function getGithubWikiSnapshot(): Promise<GithubWikiSnapshot> {
     }
     if (!indexPages.length) throw new Error("GitHub Wiki index did not contain any pages");
 
-    const results = await Promise.allSettled(indexPages.map(async (indexPage) => {
+    const results = await mapSettledWithConcurrency(indexPages, 4, async (indexPage) => {
       const githubUrl = `${GITHUB_WIKI_ROOT}/${encodeURIComponent(indexPage.id)}`;
       const response = await fetch(githubUrl, {
-        signal: AbortSignal.timeout(10_000),
+        signal: AbortSignal.any([deadline, AbortSignal.timeout(10_000)]),
         headers: githubHeaders(),
-        next: { revalidate: WIKI_REVALIDATE_SECONDS, tags: [WIKI_CACHE_TAG] },
+        cache: "no-store",
       });
       if (!response.ok) throw new Error(`${indexPage.id} returned ${response.status}`);
       return parseGithubWikiPage(await response.text(), indexPage);
-    }));
+    });
 
     const fetchedPages = results.map((result, index) => (
       result.status === "fulfilled"
@@ -134,6 +130,19 @@ export async function getGithubWikiSnapshot(): Promise<GithubWikiSnapshot> {
       syncedAt,
     };
   }
+}
+
+export async function mapSettledWithConcurrency<T, R>(items: T[], concurrency: number, task: (item: T) => Promise<R>) {
+  const results: PromiseSettledResult<R>[] = new Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      try { results[index] = { status: "fulfilled", value: await task(items[index]) }; }
+      catch (reason) { results[index] = { status: "rejected", reason }; }
+    }
+  }));
+  return results;
 }
 
 export function parseGithubWikiSidebar(markdown: string): GithubWikiNavigationItem[] {

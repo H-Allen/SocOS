@@ -5,6 +5,7 @@ import {
   applyGithubWikiSidebar,
   buildGithubWikiTree,
   getGithubWikiSnapshot,
+  mapSettledWithConcurrency,
   parseGithubWikiIndex,
   parseGithubWikiPage,
   parseGithubWikiSidebar,
@@ -17,6 +18,22 @@ vi.mock("@/lib/wiki-repository.server", () => ({ getWikiRepositoryPaths: async (
 describe("GitHub Wiki adapter", () => {
   beforeEach(() => { repository.paths = []; repository.available = true; });
   afterEach(() => vi.unstubAllGlobals());
+
+  it("bounds upstream concurrency and preserves result ordering through failures", async () => {
+    let active = 0;
+    let peak = 0;
+    const results = await mapSettledWithConcurrency(Array.from({ length: 32 }, (_, i) => i), 4, async i => {
+      active++;
+      peak = Math.max(peak, active);
+      await new Promise(resolve => setTimeout(resolve, 1));
+      active--;
+      if (i === 7) throw new Error("upstream failure");
+      return i;
+    });
+    expect(peak).toBe(4);
+    expect(results[7].status).toBe("rejected");
+    expect(results[31]).toEqual({ status: "fulfilled", value: 31 });
+  });
 
   it("discovers Wiki pages and keeps Home first", () => {
     const pages = parseGithubWikiIndex(`

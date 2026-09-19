@@ -10,6 +10,7 @@ import { getCurrentEditor } from "@/lib/firebase/editor-auth.server";
 import { getHypedPageContext } from "@/lib/hyped-site.server";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 120;
 type WikiPageProps = { searchParams: Promise<{ page?: string | string[] }> };
 
 export async function generateMetadata({ searchParams }: WikiPageProps): Promise<Metadata> {

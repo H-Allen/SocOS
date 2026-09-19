@@ -12,7 +12,7 @@ vi.mock("@/lib/firebase/site-banners.server", () => ({
   clearSiteBanner: mocks.clear, setSiteBannerPosition: mocks.position,
 }));
 vi.mock("@/lib/firebase/media.server", () => ({ savePublicSiteImage: mocks.save, deletePublicSiteImage: mocks.remove }));
-vi.mock("@/lib/github-wiki.server", () => ({ getGithubWikiSnapshot: async () => ({ pages: [{ id: "Home" }, { id: "v1.2" }] }) }));
+vi.mock("@/lib/wiki-cache.server", () => ({ getCachedWikiSnapshot: () => ({ pages: [{ id: "Home" }, { id: "v1.2" }] }) }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 const oldImage = "societies/hyped/public/banners/wiki-11111111.jpg";

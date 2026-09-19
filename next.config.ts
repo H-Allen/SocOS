@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { runtimeFirebaseWebConfig } from "./src/domain/firebase-web-config";
 
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -14,6 +15,9 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
   reactStrictMode: true,
   poweredByHeader: false,
+  // App Hosting supplies FIREBASE_WEBAPP_CONFIG at build time, not runtime.
+  // Never embed the whole environment or Admin SDK credentials here.
+  env: { NEXT_PUBLIC_HYPED_FIREBASE_CONFIG: JSON.stringify(runtimeFirebaseWebConfig(process.env)) },
   async redirects() {
     return ["/start", "/teams", "/people"].map((source) => ({ source, destination: "/", permanent: true }));
   },

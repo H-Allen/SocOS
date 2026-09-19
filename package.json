@@ -6,6 +6,8 @@
     "node": ">=20.9.0"
   },
   "scripts": {
+    "wiki:prepare": "node --conditions=react-server --import tsx scripts/prepare-wiki.ts",
+    "prebuild": "npm run wiki:prepare",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -33,6 +35,7 @@
     "@types/react-dom": "^19.2.4",
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.3.0",
+    "tsx": "^4.23.13",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
   }

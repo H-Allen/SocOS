@@ -16,10 +16,9 @@ and crop positions belong to individual Wiki pages. The former shared Wiki
 banner, if present, is retained on Wiki Home only. Images stored for removed
 standalone pages are not deleted or automatically reassigned.
 
-Firebase is optional and handles only banner storage and editor authentication.
-Without Firestore/Storage configuration, banner settings and images use the
-local `.local-data` directory; editing still requires an approved Firebase login.
-Public visitors never need an account.
+Firebase handles banner storage, editor authentication and the shared production
+Wiki cache. Public visitors never need an account. Local development can use
+`.local-data` for banner settings and images without Firebase.
 
 ## Optional main pages above the Wiki
 
@@ -56,12 +55,15 @@ a page between folders does not change its URL or its saved banner.
 
 Commit and push changes to the Wiki's default branch to publish them. The local
 `hyped-2027.wiki` clone is for authoring/reference, not a second runtime source;
-uncommitted local pages are not served. The server reads the published Git tree
-using a shallow, no-checkout cache in the system temp directory and checks it
-again on requests after 60 seconds. It does not modify the authoring clone or
-require a native Git executable. Hosting needs writable temporary storage and
-outbound HTTPS to GitHub. During a temporary Git failure, a previously known
-navigation split is retained and the page shows a refresh warning.
+uncommitted local pages are not served. Builds prepare a complete, sanitized
+snapshot. Pages and search read that snapshot immediately; they do not wait for
+GitHub. In production, one leased background worker refreshes it at most once
+every five minutes and publishes it through Firebase. Other instances check
+for updates once a minute. An incomplete refresh retains the last good content.
+The worker reads the published Git tree using a shallow, no-checkout cache in
+temporary storage, without modifying the authoring clone or requiring native
+Git. See [production deployment](docs/FIREBASE_SETUP.md) for cache prerequisites,
+freshness tradeoffs and verification.
 
 GitHub's [Wiki editing guide](https://docs.github.com/en/communities/documenting-your-project-with-wikis/adding-or-editing-wiki-pages)
 describes publishing local Wiki changes.
@@ -76,7 +78,8 @@ npm run dev
 Open <http://localhost:3000>.
 
 The site works without Firebase. By default the Wiki reader uses
-`Hyp-ed/hyped-2027`; set `HYPED_GITHUB_WIKI_REPOSITORY` to change it. To read an
+`Hyp-ed/hyped-2027`; set `HYPED_GITHUB_WIKI_REPOSITORY` at both build and runtime
+and run `npm run wiki:prepare` to change it. To read an
 existing Firebase project, copy `.env.example` to `.env.local` and provide the
 server-side project and bucket values described in `docs/FIREBASE_SETUP.md`.
 
@@ -89,3 +92,12 @@ the request's origin. The app supplies its own favicon and HYPED preview image.
 ```bash
 npm run check
 ```
+
+`npm run build` prepares Wiki content automatically. Keep
+`src/generated/wiki-snapshot.json` in version control: it is the public-content
+baseline used when GitHub is unavailable during a build. Refresh it explicitly
+with `npm run wiki:prepare` (export any repository override in the shell).
+
+For a local production-mode HTTP load smoke test, run `npm start -- --port 3100`
+after building, then `node scripts/benchmark-local.mjs`. This sends 600 requests
+with 200 concurrent workers to loopback only; it is not a cloud capacity test.

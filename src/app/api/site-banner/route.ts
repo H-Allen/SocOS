@@ -1,4 +1,4 @@
-import { getGithubWikiSnapshot } from "@/lib/github-wiki.server";
+import { getCachedWikiSnapshot } from "@/lib/wiki-cache.server";
 import { randomUUID } from "node:crypto";
 
 import { revalidatePath } from "next/cache";
@@ -83,7 +83,7 @@ export async function PATCH(request: Request) {
 async function validWikiPage(value: unknown) {
   const parsed = bannerPageSchema.safeParse(value);
   if (!parsed.success) return null;
-  const wiki = await getGithubWikiSnapshot();
+  const wiki = getCachedWikiSnapshot();
   return wiki.pages.some((page) => page.id === parsed.data) ? parsed.data : null;
 }
 

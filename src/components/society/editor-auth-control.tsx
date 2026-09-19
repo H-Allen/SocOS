@@ -3,7 +3,7 @@
 import { GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut } from "firebase/auth";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { getBrowserAuth } from "@/lib/firebase/client";
 
@@ -14,6 +14,11 @@ export function EditorAuthControl({ email, photoUrl }: { email?: string; photoUr
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [failedPhotoUrl, setFailedPhotoUrl] = useState<string>();
+
+  useEffect(() => {
+    // Initialize before the click so opening the OAuth popup needn't wait on a request.
+    void getBrowserAuth().catch(() => undefined);
+  }, []);
 
   async function signIn() {
     setBusy(true);
@@ -36,7 +41,16 @@ export function EditorAuthControl({ email, photoUrl }: { email?: string; photoUr
       }
       router.refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Google sign-in did not complete.");
+      const code = cause && typeof cause === "object" && "code" in cause ? cause.code : null;
+      if (code === "auth/unauthorized-domain") {
+        setError("This website's domain must be added to Firebase Authentication’s authorized domains.");
+      } else if (code === "auth/operation-not-allowed") {
+        setError("Google sign-in must be enabled in Firebase Authentication.");
+      } else if (code === "auth/popup-blocked") {
+        setError("Your browser blocked the sign-in window. Allow popups for this site and try again.");
+      } else if (code !== "auth/popup-closed-by-user" && code !== "auth/cancelled-popup-request") {
+        setError(cause instanceof Error ? cause.message : "Google sign-in did not complete.");
+      }
     } finally {
       setBusy(false);
     }
